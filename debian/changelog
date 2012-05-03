@@ -5,6 +5,10 @@ cloud-init (0.6.3-1) UNRELEASED; urgency=low
   * Documented homepage and VCS URLs in debian/control.
   * Remove ec2-init package and support for upgrade.
   * Added a watch file to track the download link on the homepage.
+  * http://wiki.debian.org/Python/TransitionToDHPython2
+    - Removed debian/pycompat.
+    - Build-depend on CDBS >= 0.4.90~.
+    - Removed XS-Python-Version and XB-Python-Version in debian/control.
 
  -- Charles Plessy <plessy@debian.org>  Thu, 03 May 2012 13:56:39 +0900
 
