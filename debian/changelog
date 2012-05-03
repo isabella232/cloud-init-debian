@@ -13,6 +13,7 @@ cloud-init (0.6.3-1) UNRELEASED; urgency=low
   * Disable diversion of ureadahead, which is not packaged in Debian. 
   * Removed debian/cloud-init.prerm as /etc/cron.d/cloudinit-updates
     seems to have been removed from the package earlier.
+  * Removed unused debian/dirs file.
 
  -- Charles Plessy <plessy@debian.org>  Thu, 03 May 2012 13:56:39 +0900
 
