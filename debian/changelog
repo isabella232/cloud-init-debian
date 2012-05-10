@@ -1,6 +1,6 @@
 cloud-init (0.6.3-1) UNRELEASED; urgency=low
 
-  * Debian package based on Ubuntu's package.
+  * Debian package based on Ubuntu's package (Closes: #672375).
   * Machine-readable debian/copyright file; discarded extra information.
   * Documented homepage and VCS URLs in debian/control.
   * Remove ec2-init package and support for upgrade.
