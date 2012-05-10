@@ -15,6 +15,7 @@ cloud-init (0.6.3-1) UNRELEASED; urgency=low
     seems to have been removed from the package earlier.
   * Removed unused debian/dirs file.
   * Removed grub-legacy-ec2, to be packaged elsewhere, see #672104.
+  * Priority optional as there is no conflict anymore (debian/control).
 
  -- Charles Plessy <plessy@debian.org>  Thu, 03 May 2012 13:56:39 +0900
 
