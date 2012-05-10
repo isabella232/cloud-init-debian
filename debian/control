@@ -32,13 +32,3 @@ Depends: cloud-utils,
 Description: init scripts for cloud instances
  Cloud instances need special scripts to run during initialisation
  to retrieve and install ssh keys and to let the user run various scripts.
-
-Package: grub-legacy-ec2
-Depends: debconf (>= 1.5.19) | cdebconf, util-linux (>= 2.15-1), ${misc:Depends}
-Conflicts: grub
-Suggests: grub-legacy-doc
-Architecture: all
-Description: handles update-grub for ec2 instances
- EC2 instances that use grub-legacy as a bootloader need a way to keep
- /boot/grub/menu.lst up to date while not conflicting with grub-pc.
- This package provides that.
