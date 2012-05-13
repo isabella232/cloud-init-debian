@@ -7,8 +7,6 @@ binary-install/cloud-init::cloud-init-fixups
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/python-distutils.mk
 
-DEB_DH_INSTALL_SOURCEDIR := debian/tmp
-
 cloud-init-fixups:
 	for x in $(DEB_DESTDIR)/usr/bin/*.py; do mv "$$x" "$${x%.py}"; done
 	install -d $(DEB_DESTDIR)/etc/rsyslog.d

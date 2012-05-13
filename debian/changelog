@@ -12,7 +12,7 @@ cloud-init (0.6.3-1) UNRELEASED; urgency=low
   * Use Debhelper 9 (debian/control, debian/compat). 
   * Removed debian/cloud-init.prerm as /etc/cron.d/cloudinit-updates
     seems to have been removed from the package earlier.
-  * Renamed debian/dirs debian/cloud-init.dirs.
+  * Removed unneeded debian/dirs debian/cloud-init.install.
   * Removed grub-legacy-ec2, to be packaged elsewhere, see #672104.
   * Priority optional as there is no conflict anymore (debian/control).
   * Extended cloud-init's description (debian/control).
