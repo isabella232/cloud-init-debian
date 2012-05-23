@@ -5,7 +5,7 @@ cloud-init (0.6.3-2) experimental; urgency=low
 
  -- Charles Plessy <plessy@debian.org>  Wed, 23 May 2012 09:26:29 +0900
 
-cloud-init (0.6.3-1) UNRELEASED; urgency=low
+cloud-init (0.6.3-1) experimental; urgency=low
 
   * Debian package based on Ubuntu's package.
   * Machine-readable debian/copyright file; discarded extra information.
