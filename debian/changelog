@@ -1,6 +1,13 @@
-cloud-init (0.6.3-1) experimental; urgency=low
+cloud-init (0.6.3-2) experimental; urgency=low
 
-  * Debian package based on Ubuntu's package (Closes: #672375).
+  * First version in Debian (Closes: #672375).
+  * Do not depend on cloud-utils, which is only in Ubuntu. 
+
+ -- Charles Plessy <plessy@debian.org>  Wed, 23 May 2012 09:26:29 +0900
+
+cloud-init (0.6.3-1) UNRELEASED; urgency=low
+
+  * Debian package based on Ubuntu's package.
   * Machine-readable debian/copyright file; discarded extra information.
   * Documented homepage and VCS URLs in debian/control.
   * Remove ec2-init package and support for upgrade.

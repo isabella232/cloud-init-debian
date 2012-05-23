@@ -17,7 +17,8 @@ Vcs-Browser: http://svn.debian.org/websvn/python-apps/packages/cloud-init/trunk/
 
 Package: cloud-init
 Architecture: all
-Depends: cloud-utils,
+Depends: 
+# cloud-utils,
          ifupdown (>= 0.6.10ubuntu5),
          procps,
          python,
