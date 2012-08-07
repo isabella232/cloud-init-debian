@@ -1,3 +1,12 @@
+cloud-init (0.6.3-3) UNRELEASED; urgency=low
+
+  * Remove unowned files in /etc/apt/apt.conf.d/ after purge. (Closes: #674237).
+  * Fix versioned dependency on ifupdown, otherwise is uninstallable.
+  * Fix Vcs-Svn URL.
+  * Add myself as Uploader.
+
+ -- Miguel Landaeta <miguel@miguel.cc>  Sun, 05 Aug 2012 21:15:36 -0430
+
 cloud-init (0.6.3-2) experimental; urgency=low
 
   * First version in Debian (Closes: #672375).
