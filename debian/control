@@ -21,7 +21,7 @@ Depends:
 # cloud-utils,
          ifupdown (>= 0.6.10),
          procps,
-         python,
+         python (>= 2.7),
          python-cheetah,
          python-configobj,
          python-oauth,

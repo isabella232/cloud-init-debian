@@ -11,6 +11,8 @@ cloud-init (0.6.3-3) UNRELEASED; urgency=low
   * Add missing python-boto dependency.
   * Add fix-cfg-builtin.patch to set syslog_fix_perms to root:adm by
     default since we don't have any syslog user in Debian.
+  * Depends on Python >= 2.7, at least because subprocess needs
+    check_output method.
 
  -- Miguel Landaeta <miguel@miguel.cc>  Sun, 05 Aug 2012 21:15:36 -0430
 
