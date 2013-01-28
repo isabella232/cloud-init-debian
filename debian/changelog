@@ -1,4 +1,4 @@
-cloud-init (0.7.1-1) UNRELEASED; urgency=low
+cloud-init (0.7.1-1) unstable; urgency=low
 
   [ Miguel Landaeta ]
   * Remove unowned files in /etc/apt/apt.conf.d/ after purge. (Closes: #674237).
