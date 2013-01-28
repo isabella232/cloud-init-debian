@@ -15,6 +15,7 @@ cloud-init (0.7.1-1) UNRELEASED; urgency=low
   * Depends on Python >= 2.7, at least because subprocess needs
     check_output method.
   * Drop CDBS
+  * Add init scripts
 
  -- Julien Danjou <acid@debian.org>  Mon, 28 Jan 2013 10:49:10 +0100
 

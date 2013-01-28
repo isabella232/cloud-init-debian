@@ -10,3 +10,6 @@ override_dh_install:
 override_dh_auto_test:
 	dh_auto_test
 	$(MAKE) test
+
+override_dh_installinit:
+	dh_installinit --no-start --no-restart-on-upgrade
