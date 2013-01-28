@@ -35,10 +35,13 @@ Depends:
          ${misc:Depends},
          ${python:Depends}
 Description: configuration and customization of cloud instances
- System to handle early initialization of a cloud instance. Cloud-init can for
- example set a default locale and a host name, generate SSH private host keys,
- add SSH keys to a user's .ssh/authorized_keys so they can log in, and set up
- ephemeral mount points.
+ Framework and tool written in Python to handle early initialization of a
+ cloud instance. Cloud-init can for example set a default locale and a host
+ name, generate SSH private host keys, add SSH keys to a user's
+ .ssh/authorized_keys so they can log in, and set up ephemeral mount points.
  .
  Cloud-init's behavior can be configured via user-data, given by the user at
  instance launch time.
+ .
+ See upstream project for more details:
+ https://help.ubuntu.com/community/CloudInit
