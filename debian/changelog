@@ -1,4 +1,4 @@
-cloud-init (0.7.1-2) UNRELEASED; urgency=low
+cloud-init (0.7.1-2) unstable; urgency=low
 
   * Depends on python 2.7 or python-argparse
   * Depends on the right version of python-boto
