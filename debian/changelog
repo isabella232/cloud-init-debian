@@ -2,6 +2,7 @@ cloud-init (0.7.1-2) UNRELEASED; urgency=low
 
   * Depends on python 2.7 or python-argparse
   * Depends on the right version of python-boto
+  * Fix description issue with line leading with dot
 
  -- Julien Danjou <acid@debian.org>  Tue, 29 Jan 2013 10:50:43 +0100
 
