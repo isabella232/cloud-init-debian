@@ -32,6 +32,7 @@ Depends: lsb-base (>= 3.2-14),
          python-software-properties,
          python-yaml,
          python-boto (>= 2.3),
+         python-prettytable,
          ${misc:Depends}
 Description: configuration and customization of cloud instances
  Framework and tool written in Python to handle early initialization of a
