@@ -12,7 +12,7 @@ Build-Depends: debhelper (>= 9),
                python-mocker,
                python-configobj,
                python-oauth,
-               python-boto,
+               python-boto (>= 2.3),
                python-cheetah
 Standards-Version: 3.9.3
 Homepage: https://launchpad.net/cloud-init
@@ -21,19 +21,18 @@ Vcs-Browser: http://svn.debian.org/websvn/python-apps/packages/cloud-init/trunk/
 
 Package: cloud-init
 Architecture: all
-Depends: 
-         lsb-base (>= 3.2-14),
+Depends: lsb-base (>= 3.2-14),
          ifupdown (>= 0.6.10),
          procps,
-         python (>= 2.7),
+         python (>= 2.6),
+         python (>= 2.7) | python-argparse,
          python-cheetah,
          python-configobj,
          python-oauth,
          python-software-properties,
          python-yaml,
-         python-boto,
-         ${misc:Depends},
-         ${python:Depends}
+         python-boto (>= 2.3),
+         ${misc:Depends}
 Description: configuration and customization of cloud instances
  Framework and tool written in Python to handle early initialization of a
  cloud instance. Cloud-init can for example set a default locale and a host
