@@ -1,13 +1,14 @@
 Source: cloud-init
+Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
+Uploaders: Charles Plessy <plessy@debian.org>,
+           Miguel Landaeta <miguel@miguel.cc>,
+           Julien Danjou <acid@debian.org>
 Section: admin
 Priority: optional
-Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
-Uploaders: Charles Plessy <plessy@debian.org>, Miguel Landaeta <miguel@miguel.cc>,
-           Julien Danjou <acid@debian.org>
 Build-Depends: debhelper (>= 9),
                pyflakes,
                pylint,
-               python (>= 2.6.6-3~),
+               python,
                python-nose,
                python-mocker,
                python-configobj,
@@ -17,16 +18,16 @@ Build-Depends: debhelper (>= 9),
                python-setuptools,
                python-yaml
 Standards-Version: 3.9.3
-Homepage: https://launchpad.net/cloud-init
-Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/cloud-init/trunk/
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/cloud-init/trunk/
+Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/cloud-init/trunk/
+Homepage: https://launchpad.net/cloud-init
 
 Package: cloud-init
 Architecture: all
-Depends: lsb-base (>= 3.2-14),
-         ifupdown (>= 0.6.10),
+Depends: lsb-base,
+         ifupdown,
          procps,
-         python (>= 2.6),
+         python,
          python (>= 2.7) | python-argparse,
          python-cheetah,
          python-configobj,
@@ -47,3 +48,4 @@ Description: configuration and customization of cloud instances
  .
  See upstream project for more details:
  https://help.ubuntu.com/community/CloudInit
+
