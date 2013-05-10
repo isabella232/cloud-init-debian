@@ -1,6 +1,10 @@
 cloud-init (0.7.1-4) UNRELEASED; urgency=low
 
+  [ Jakub Wilk ]
   * Use canonical URIs for Vcs-* fields.
+
+  [ Charles Plessy ]
+  * Build-depends on python-setuptools and python-yaml. Closes: #707443
 
  -- Jakub Wilk <jwilk@debian.org>  Sun, 05 May 2013 18:04:56 +0200
 
