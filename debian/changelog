@@ -1,4 +1,6 @@
-cloud-init (0.7.1-4) UNRELEASED; urgency=low
+cloud-init (0.7.2-1) UNRELEASED; urgency=low
+
+  * New upstream release.
 
   [ Jakub Wilk ]
   * Use canonical URIs for Vcs-* fields.
