@@ -7,9 +7,11 @@ override_dh_install:
 	dh_install
 	rm -rf debian/cloud-init/usr/lib/python?.?/dist-packages/tests
 
+ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
 override_dh_auto_test:
 	dh_auto_test
 	$(MAKE) test
+endif
 
 override_dh_installinit:
 	dh_installinit --no-start --no-restart-on-upgrade
