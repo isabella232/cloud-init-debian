@@ -12,6 +12,8 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
 
   [ Thomas Goirand ]
   * Made the "make test" respect DEB_BUILD_OPTIONS=nocheck.
+  * Added X-Start-Before: sshd in debian/cloud-init.init, since cloud-init must
+    fix the sshd host keys before it starts.
 
  -- Thomas Goirand <zigo@debian.org>  Sun, 26 May 2013 16:29:45 +0000
 
