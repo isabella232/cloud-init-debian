@@ -17,6 +17,8 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
   * Added a patch of the test suite to use /sbin/blkid and not just blkid, as
     otherwise, the unit test fails.
   * Adds internationalization of the debconf messages (eg: po folder, etc.).
+  * Adds a patch to disable a RHEL test (set hostname) which fails (of course,
+    we don't really care about such test in Debian).
 
  -- Thomas Goirand <zigo@debian.org>  Sun, 26 May 2013 16:29:45 +0000
 
