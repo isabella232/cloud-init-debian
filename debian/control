@@ -6,6 +6,7 @@ Uploaders: Charles Plessy <plessy@debian.org>,
 Section: admin
 Priority: optional
 Build-Depends: debhelper (>= 9),
+               po-debconf,
                pyflakes,
                pylint,
                python,
@@ -48,4 +49,3 @@ Description: configuration and customization of cloud instances
  .
  See upstream project for more details:
  https://help.ubuntu.com/community/CloudInit
-
