@@ -20,6 +20,7 @@ cloud-init (0.7.2-1) unstable; urgency=low
   * Adds a patch to disable a RHEL test (set hostname) which fails (of course,
     we don't really care about such test in Debian).
   * Added missing dependency: python-requests.
+  * Added myself as uploader.
 
  -- Thomas Goirand <zigo@debian.org>  Sun, 26 May 2013 16:29:45 +0000
 
