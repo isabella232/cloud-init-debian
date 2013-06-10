@@ -17,6 +17,7 @@ Build-Depends: debhelper (>= 9),
                python-oauth,
                python-boto (>= 2.3),
                python-cheetah,
+               python-requests,
                python-setuptools,
                python-yaml
 Standards-Version: 3.9.3
