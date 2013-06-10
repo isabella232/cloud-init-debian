@@ -11,15 +11,15 @@ Build-Depends: debhelper (>= 9),
                pyflakes,
                pylint,
                python,
-               python-nose,
-               python-mocker,
                python-configobj,
                python-oauth,
                python-boto (>= 2.3),
                python-cheetah,
                python-requests,
-               python-setuptools,
-               python-yaml
+               python-yaml,
+               python-mocker,
+               python-nose,
+               python-setuptools
 Standards-Version: 3.9.3
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/cloud-init/trunk/
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/cloud-init/trunk/
