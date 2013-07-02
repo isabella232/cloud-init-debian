@@ -42,14 +42,13 @@ Depends: lsb-base,
          python-software-properties,
          ${misc:Depends},
          ${python:Depends}
-Description: configuration and customization of cloud instances
- Framework and tool written in Python to handle early initialization of a
- cloud instance. Cloud-init can for example set a default locale and a host
- name, generate SSH private host keys, add SSH keys to a user's
- authorized_keys so they can log in, and set up ephemeral mount points.
+Description: initialization system for infrastructure cloud instances
+ Cloud-init provides a framework and tool to configure and customize virtual
+ machine instances for Infrastructure-as-a-Service (IaaS) clouds platforms. It
+ can for example set a default locale and hostname, generate SSH private host
+ keys, install SSH public keys for logging into a default account, set up
+ ephemeral mount points, and run user-provided scripts.
  .
- Cloud-init's behavior can be configured via user-data, given by the user at
- instance launch time.
- .
- See upstream project for more details:
- https://help.ubuntu.com/community/CloudInit
+ Various methods are supported for passing data to the instance at launch
+ time, including the standard interfaces of multiple platforms.
+

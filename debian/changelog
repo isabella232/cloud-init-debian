@@ -3,6 +3,8 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
   * Added python-requests to build dependencies (Closes: #711797). 
   * Conforms with Policy 3.9.4.
   * Depend on ${python:Depends}.
+  * Description and Debconf messages reviewed by the Smith project.
+    Closes: #710444, thanks to Justin B Rye and Christian Perrier.
   * German translation (Closes: #714738, thanks to Chris Leick).
   * Swedish translation (Closes: #714646, thanks to Martin Bagge).
   * French translation (Closes: #714608, thanks to Julien Patriarca). 
