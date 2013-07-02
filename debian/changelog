@@ -10,6 +10,7 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
   * French translation (Closes: #714608, thanks to Julien Patriarca). 
   * Russian translation (Closes: #714093, thanks to Yuri Kozlov).
   * Danish translation (Closes: #714785, thanks to Joe Dalton).
+  * Czech tranlsation (Closes: #714356, thanks to Michal Šimůnek).
 
  -- Charles Plessy <plessy@debian.org>  Mon, 10 Jun 2013 10:14:05 +0900
 
