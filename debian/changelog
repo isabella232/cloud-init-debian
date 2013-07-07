@@ -8,7 +8,7 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
   * German translation (Closes: #714738, thanks to Chris Leick).
   * Swedish translation (Closes: #714646, thanks to Martin Bagge).
   * French translation (Closes: #714608, thanks to Julien Patriarca). 
-  * Russian translation (Closes: #714093, thanks to Yuri Kozlov).
+  * Russian translation (Closes: #714093, #715168, thanks to Yuri Kozlov).
   * Danish translation (Closes: #714785, thanks to Joe Dalton).
   * Czech tranlsation (Closes: #714356, thanks to Michal Šimůnek).
 
