@@ -1,22 +1,22 @@
 #! /bin/sh
 ### BEGIN INIT INFO
-# Provides:          cloud-init
-# Required-Start:    $local_fs $remote_fs $syslog $network cloud-init-local
-# Required-Stop:     $remote_fs
-# X-Start-Before:    sshd
+# Provides:          cloud-config
+# Required-Start:    cloud-init cloud-init-local
+# Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Cloud init
+# Short-Description: Cloud init modules --mode config
 # Description:       Cloud configuration initialization
 ### END INIT INFO
 
-# Author: Julien Danjou <acid@debian.org>
+# Authors: Julien Danjou <acid@debian.org>
+#          Juerg Haefliger <juerg.haefliger@hp.com>
 
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="Cloud service"
 NAME=cloud-init
 DAEMON=/usr/bin/$NAME
-DAEMON_ARGS="init"
+DAEMON_ARGS="modules --mode config"
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
@@ -34,22 +34,22 @@ SCRIPTNAME=/etc/init.d/$NAME
 . /lib/lsb/init-functions
 
 case "$1" in
-    start)
+start)
 	log_daemon_msg "Starting $DESC" "$NAME"
 	$DAEMON ${DAEMON_ARGS}
 	case "$?" in
-	    0|1) log_end_msg 0 ;;
-	    2) log_end_msg 1 ;;
+		0|1) log_end_msg 0 ;;
+		2) log_end_msg 1 ;;
 	esac
-	;;
-    stop|restart|force-reload)
-        echo "Error: argument '$1' not supported" >&2
-        exit 3
-        ;;
-    *)
+;;
+stop|restart|force-reload)
+	echo "Error: argument '$1' not supported" >&2
+	exit 3
+;;
+*)
 	echo "Usage: $SCRIPTNAME {start}" >&2
 	exit 3
-	;;
+;;
 esac
 
 :

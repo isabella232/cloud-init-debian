@@ -1,5 +1,6 @@
-cloud-init (0.7.2-2) UNRELEASED; urgency=low
+cloud-init (0.7.2-3) UNRELEASED; urgency=low
 
+  [ Charles Plessy ]
   * Added python-requests to build dependencies (Closes: #711797). 
   * Conforms with Policy 3.9.4.
   * Depend on ${python:Depends}.
@@ -13,7 +14,14 @@ cloud-init (0.7.2-2) UNRELEASED; urgency=low
   * Czech tranlsation (Closes: #714356, thanks to Michal Šimůnek).
   * Portugese tranlsation (Closes: #715241, thanks to Américo Monteiro).
 
- -- Charles Plessy <plessy@debian.org>  Mon, 10 Jun 2013 10:14:05 +0900
+  [ Thomas Goirand ]
+  * Added missing init scripts cloud-init-local, cloud-init-final and
+    cloud-config, to run cloud-init as below:
+    - modules --mode config (cloud-config)
+    - modules --mode final (cloud-init-final)
+    - init --local (cloud-init-local)
+
+ -- Thomas Goirand <zigo@debian.org>  Tue, 09 Jul 2013 23:10:34 +0800
 
 cloud-init (0.7.2-1) unstable; urgency=low
 
