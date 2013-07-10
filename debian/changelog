@@ -15,6 +15,7 @@ cloud-init (0.7.2-3) UNRELEASED; urgency=low
   * Portugese tranlsation (Closes: #715241, thanks to Américo Monteiro).
   * Japanese translation (Closes: #715500, thanks to victory).
   * Italian translation (Closes: #715390, thanks to Beatrice Torracca).
+  * Polish translation (Closes: #715799, thanks to Michał Kułach).
 
   [ Thomas Goirand ]
   * Added missing init scripts cloud-init-local, cloud-init-final and
