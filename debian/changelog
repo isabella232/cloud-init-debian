@@ -25,6 +25,8 @@ cloud-init (0.7.2-3) UNRELEASED; urgency=low
     - init --local (cloud-init-local)
   * Reads the currently set value in /etc/cloud/cloud.cfg.d/90_dpkg.cfg to
     db_set the value of cloud-init/datasources (Closes: #709773).
+  * Check if upstart is init in all init scripts (Closes: #712985). Thanks to
+    Dmitrijs Ledkovs for reporting and his patch in the BTS.
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 09 Jul 2013 23:10:34 +0800
 
