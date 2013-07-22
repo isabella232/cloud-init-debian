@@ -19,7 +19,7 @@ cloud-init (0.7.2-3) UNRELEASED; urgency=low
 
   [ Thomas Goirand ]
   * Added missing init scripts cloud-init-local, cloud-init-final and
-    cloud-config, to run cloud-init as below:
+    cloud-config, to run cloud-init as below (Closes: #709173):
     - modules --mode config (cloud-config)
     - modules --mode final (cloud-init-final)
     - init --local (cloud-init-local)
