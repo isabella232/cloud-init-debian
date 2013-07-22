@@ -23,6 +23,8 @@ cloud-init (0.7.2-3) UNRELEASED; urgency=low
     - modules --mode config (cloud-config)
     - modules --mode final (cloud-init-final)
     - init --local (cloud-init-local)
+  * Reads the currently set value in /etc/cloud/cloud.cfg.d/90_dpkg.cfg to
+    db_set the value of cloud-init/datasources (Closes: #709773).
 
  -- Thomas Goirand <zigo@debian.org>  Tue, 09 Jul 2013 23:10:34 +0800
 
