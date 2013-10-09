@@ -1,3 +1,12 @@
+cloud-init (0.7.2-4) experimental; urgency=low
+
+  * Added GCE as new source, thanks to the patch from Brendan Burns
+    <bburns@google.com> (Closes: 725384).
+  * Uploading the package with the GCE patch to Experimental, to stage it for
+    some tests.
+
+ -- Thomas Goirand <zigo@debian.org>  Wed, 09 Oct 2013 06:52:22 +0000
+
 cloud-init (0.7.2-3) unstable; urgency=low
 
   [ Charles Plessy ]

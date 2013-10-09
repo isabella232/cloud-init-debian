@@ -1,0 +1,121 @@
+Description: Adds Google Cloud Engine (GCE) as new source
+Author: Brendan Burns <bburns@google.com>
+Bug-Debian: http://bugs.debian.org/725384
+Origin: upstream, http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=725384
+Last-Update: 2013-10-08
+
+--- /dev/null
++++ cloud-init-0.7.2/cloudinit/sources/DataSourceGCE.py
+@@ -0,0 +1,112 @@
++# Copyright 2013 Google Inc. All Rights Reserved.
++#
++# This program is free software: you can redistribute it and/or modify
++# it under the terms of the GNU General Public License version 3, as
++# published by the Free Software Foundation.
++#
++# This program is distributed in the hope that it will be useful,
++# but WITHOUT ANY WARRANTY; without even the implied warranty of
++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++# GNU General Public License for more details.
++#
++# You should have received a copy of the GNU General Public License
++# along with this program.  If not, see <http://www.gnu.org/licenses/>.
++"""An implementation of the DataSource API for cloud-init that knows
++how to talk to Google Compute Engine virtual machines.
++"""
++import urllib2
++
++from cloudinit import log as logging
++from cloudinit import sources
++
++MD_URL = 'http://metadata/computeMetadata/v1beta1'
++
++LOG = logging.getLogger(__name__)
++
++class MetaDataResponse(object):
++  """ An object that represents a response from the metadata server."""
++  def __init__(self, code, contents):
++    self._code = code
++    self._contents = contents
++
++  @property
++  def code(self):
++    return self._code
++
++  @property
++  def contents(self):
++    return self._contents
++
++
++class DataSourceGCE(sources.DataSource):
++  """Implements the cloud-init DataSource API for GCE."""
++
++  def __str__(self):
++    clazz = self.__class__
++    return str(clazz.__name__)
++
++  def _ReadUrl(self, url):
++    headers = {}
++    try:
++      req = urllib2.Request(url, data=None, headers=headers)
++      resp = urllib2.urlopen(req, timeout=50)
++      return MetaDataResponse(200, resp.read())
++    except urllib2.HTTPError as e:
++      return MetaDataResponse(e.code, '')
++
++  def _GetMetadata(self, server_name, local_name):
++    result = self._ReadUrl(MD_URL + '/' + server_name)
++    if result.code != 200:
++      LOG.error('Failed to fetch %s from server (%d)',
++                server_name, result.code)
++      return False
++    self.metadata[local_name] = result.contents
++    return True
++
++  def get_data(self):
++    """Overrides the implementation in the parent class."""
++    self.metadata = {}
++    try:
++      if not self._GetMetadata('instance/id', 'instance-id'):
++        return False
++      if not self._GetMetadata('instance/zone', 'availability-zone'):
++        return False
++      if not self._GetMetadata('project/attributes/sshKeys', 'public-keys'):
++        return False
++      if not self._GetMetadata('instance/hostname', 'local-hostname'):
++        return False
++    except:
++      LOG.error('GCE Metadata lookup failed.', exc_info=True)
++      return False
++
++    clipped_keys = self._TrimKeys(self.metadata['public-keys'])
++    self.metadata['public-keys'] = clipped_keys
++
++    try:
++      userdata_result = self._ReadUrl(MD_URL + 'instance/attributes/user-data')
++      if userdata_result != 200:
++        LOG.error('Got %d from metadata server',
++                  userdata_result.code)
++      self.userdata_raw = userdata_result.contents
++    except:
++      LOG.error('Failed to load userdata', exc_info=True)
++      if not self.userdata_raw:
++        self.userdata_raw = ''
++    return True
++
++  def _TrimKeys(self, key_string):
++    index = key_string.index(':')
++    if index > 0:
++      return key_string[(index + 1):]
++    else:
++      return key_string
++
++
++DATASOURCES = [
++    (DataSourceGCE, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
++    ]
++
++
++# DataSource instantiation hook.
++def get_datasource_list(depends):
++  return sources.list_from_depends(depends, DATASOURCES)
