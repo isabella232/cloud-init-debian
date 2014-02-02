@@ -2,6 +2,7 @@ Description: Adds Google Cloud Engine (GCE) as new source
 Author: Brendan Burns <bburns@google.com>
 Bug-Debian: http://bugs.debian.org/725384
 Origin: upstream, http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=725384
+Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1275414
 Last-Update: 2013-10-08
 
 --- /dev/null
