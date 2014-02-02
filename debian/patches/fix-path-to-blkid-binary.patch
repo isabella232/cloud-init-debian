@@ -1,6 +1,6 @@
 Description: Fix the path to blkid in test suite
 Author: Thomas Goirand <zigo@debian.org>
-Forwarded: no
+Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1275415
 Last-Update: 2013-05-28
 
 --- cloud-init-0.7.2.orig/cloudinit/util.py
