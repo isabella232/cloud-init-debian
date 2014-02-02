@@ -1,13 +1,15 @@
 Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Source: https://launchpad.net/cloud-init/trunk/0.7.2/+download/cloud-init-0.7.2.tar.gz
+Source: https://launchpad.net/cloud-init/trunk/0.7.4/+download/cloud-init-0.7.4.tar.gz
 
 Files: *
-Copyright: © 2009-2012, Canonical Ltd.
-           © 2012 Hewlett-Packard Development Company, L.P.
+Copyright: © 2009-2013, Canonical Ltd.
+           © 2012-2013 Hewlett-Packard Development Company, L.P.
            © 2012 Cosmin Luta
-           © 2012 Yahoo! Inc.
+           © 2012-2013 Yahoo! Inc.
            © 2012 Gerard Dethier
            © 2013 Craig Tracey
+           © 2012-2013 CERIT Scientific Cloud
+           © 2012-2013 OpenNebula.org
 License: GPL-3
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License version 3, as
@@ -24,7 +26,7 @@ License: GPL-3
  The complete text of the GPL version 3 can be seen in
  /usr/share/common-licenses/GPL-3.
 
-File: tools/hacking.py
+Files: tools/hacking.py
 Copyright: © 2012, Cloudscaling
 License: Apache-2.0
  Licensed under the Apache License, Version 2.0 (the "License"); you may

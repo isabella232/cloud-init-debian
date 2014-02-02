@@ -1,3 +1,10 @@
+cloud-init (0.7.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release. 
+  * Depend and Build-Depend on python-jsonpatch and python-serial.
+
+ -- Charles Plessy <plessy@debian.org>  Sun, 02 Feb 2014 16:45:11 +0900
+
 cloud-init (0.7.2-4) experimental; urgency=low
 
   * Added GCE as new source, thanks to the patch from Brendan Burns
