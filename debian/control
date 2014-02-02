@@ -22,7 +22,7 @@ Build-Depends: debhelper (>= 9),
                python-mocker,
                python-nose,
                python-setuptools
-Standards-Version: 3.9.4
+Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/cloud-init/trunk/
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/cloud-init/trunk/
 Homepage: https://launchpad.net/cloud-init
@@ -55,4 +55,3 @@ Description: initialization system for infrastructure cloud instances
  .
  Various methods are supported for passing data to the instance at launch
  time, including the standard interfaces of multiple platforms.
-
