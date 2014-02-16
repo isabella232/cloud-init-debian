@@ -1,4 +1,4 @@
-cloud-init (0.7.4-1) unstable; urgency=medium
+cloud-init (0.7.4-1) UNRELEASED; urgency=medium
 
   * New upstream release. 
 
@@ -14,7 +14,7 @@ cloud-init (0.7.4-1) unstable; urgency=medium
   * Correct installation path for rsyslog config snippet.
     Thanks, Juerg Haefliger <juergh@gmail.com>.  Closes: #707125
 
- -- Charles Plessy <plessy@debian.org>  Sun, 16 Feb 2014 12:44:47 +0900
+ -- Charles Plessy <plessy@debian.org>  Sun, 16 Feb 2014 15:47:35 +0900
 
 cloud-init (0.7.2-3) unstable; urgency=low
 
