@@ -51,7 +51,9 @@ class DataSourceConfigDrive(sources.DataSource):
         self.ec2_metadata = None
 
     def __str__(self):
-        mstr = "%s [%s,ver=%s]" % (util.obj_name(self), self.dsmode,
+        root = sources.DataSource.__str__(self)
+        mstr = "%s [%s,ver=%s]" % (root,
+                                   self.dsmode,
                                    self.version)
         mstr += "[source=%s]" % (self.source)
         return mstr
@@ -152,7 +154,7 @@ class DataSourceConfigDrive(sources.DataSource):
             return False
 
         md = results['metadata']
-        md = util.mergedict(md, DEFAULT_METADATA)
+        md = util.mergemanydict([md, DEFAULT_METADATA])
 
         # Perform some metadata 'fixups'
         #
@@ -256,6 +258,9 @@ def find_candidate_devs():
         * labeled with 'config-2'
     """
 
+    # Query optical drive to get it in blkid cache for 2.6 kernels
+    util.find_devs_with(path="/dev/sr0")
+
     by_fstype = (util.find_devs_with("TYPE=vfat") +
                  util.find_devs_with("TYPE=iso9660"))
     by_label = util.find_devs_with("LABEL=config-2")
@@ -270,7 +275,7 @@ def find_candidate_devs():
     combined = (by_label + [d for d in by_fstype if d not in by_label])
 
     # We are looking for block device (sda, not sda1), ignore partitions
-    combined = [d for d in combined if d[-1] not in "0123456789"]
+    combined = [d for d in combined if not util.is_partition(d)]
 
     return combined
 
