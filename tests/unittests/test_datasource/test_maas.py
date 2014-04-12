@@ -3,11 +3,13 @@ import os
 
 from cloudinit.sources import DataSourceMAAS
 from cloudinit import url_helper
+from cloudinit import util
+from tests.unittests.helpers import populate_dir
 
-from mocker import MockerTestCase
+import mocker
 
 
-class TestMAASDataSource(MockerTestCase):
+class TestMAASDataSource(mocker.MockerTestCase):
 
     def setUp(self):
         super(TestMAASDataSource, self).setUp()
@@ -114,9 +116,12 @@ class TestMAASDataSource(MockerTestCase):
 
         for key in valid_order:
             url = "%s/%s/%s" % (my_seed, my_ver, key)
-            mock_request(url, headers=my_headers, timeout=None)
+            mock_request(url, headers=None, timeout=mocker.ANY,
+                         data=mocker.ANY, sec_between=mocker.ANY,
+                         ssl_details=mocker.ANY, retries=mocker.ANY,
+                         headers_cb=my_headers_cb)
             resp = valid.get(key)
-            self.mocker.result(url_helper.UrlResponse(200, resp))
+            self.mocker.result(util.StringResponse(resp))
         self.mocker.replay()
 
         (userdata, metadata) = DataSourceMAAS.read_maas_seed_url(my_seed,
@@ -136,12 +141,5 @@ class TestMAASDataSource(MockerTestCase):
         """Verify seed_url with no found entries raises MAASSeedDirNone."""
         pass
 
-
-def populate_dir(seed_dir, files):
-    os.mkdir(seed_dir)
-    for (name, content) in files.iteritems():
-        with open(os.path.join(seed_dir, name), "w") as fp:
-            fp.write(content)
-            fp.close()
 
 # vi: ts=4 expandtab
