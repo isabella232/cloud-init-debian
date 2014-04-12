@@ -1,7 +1,7 @@
 # vi: ts=4 expandtab
 #
 #    Copyright (C) 2012 Canonical Ltd.
-#    Copyright (C) 2012 Hewlett-Packard Development Company, L.P.
+#    Copyright (C) 2012, 2013 Hewlett-Packard Development Company, L.P.
 #    Copyright (C) 2012 Yahoo! Inc.
 #
 #    Author: Scott Moser <scott.moser@canonical.com>
@@ -216,8 +216,8 @@ class ConfigMerger(object):
                 if ds_cfg and isinstance(ds_cfg, (dict)):
                     d_cfgs.append(ds_cfg)
             except:
-                util.logexc(LOG, ("Failed loading of datasource"
-                                  " config object from %s"), self._ds)
+                util.logexc(LOG, "Failed loading of datasource config object "
+                            "from %s", self._ds)
         return d_cfgs
 
     def _get_env_configs(self):
@@ -227,8 +227,8 @@ class ConfigMerger(object):
             try:
                 e_cfgs.append(util.read_conf(e_fn))
             except:
-                util.logexc(LOG, ('Failed loading of env. config'
-                                  ' from %s'), e_fn)
+                util.logexc(LOG, 'Failed loading of env. config from %s',
+                            e_fn)
         return e_cfgs
 
     def _get_instance_configs(self):
@@ -242,8 +242,8 @@ class ConfigMerger(object):
             try:
                 i_cfgs.append(util.read_conf(cc_fn))
             except:
-                util.logexc(LOG, ('Failed loading of cloud-config'
-                                      ' from %s'), cc_fn)
+                util.logexc(LOG, 'Failed loading of cloud-config from %s',
+                            cc_fn)
         return i_cfgs
 
     def _read_cfg(self):
@@ -259,8 +259,8 @@ class ConfigMerger(object):
                 try:
                     cfgs.append(util.read_conf(c_fn))
                 except:
-                    util.logexc(LOG, ("Failed loading of configuration"
-                                       " from %s"), c_fn)
+                    util.logexc(LOG, "Failed loading of configuration from %s",
+                                c_fn)
 
         cfgs.extend(self._get_env_configs())
         cfgs.extend(self._get_instance_configs())
@@ -281,6 +281,7 @@ class ContentHandlers(object):
 
     def __init__(self):
         self.registered = {}
+        self.initialized = []
 
     def __contains__(self, item):
         return self.is_registered(item)
@@ -291,11 +292,18 @@ class ContentHandlers(object):
     def is_registered(self, content_type):
         return content_type in self.registered
 
-    def register(self, mod):
+    def register(self, mod, initialized=False, overwrite=True):
         types = set()
         for t in mod.list_types():
+            if overwrite:
+                types.add(t)
+            else:
+                if not self.is_registered(t):
+                    types.add(t)
+        for t in types:
             self.registered[t] = mod
-            types.add(t)
+        if initialized and mod not in self.initialized:
+            self.initialized.append(mod)
         return types
 
     def _get_handler(self, content_type):
@@ -306,15 +314,6 @@ class ContentHandlers(object):
 
     def iteritems(self):
         return self.registered.iteritems()
-
-    def register_defaults(self, defs):
-        registered = set()
-        for mod in defs:
-            for t in mod.list_types():
-                if not self.is_registered(t):
-                    self.registered[t] = mod
-                    registered.add(t)
-        return registered
 
 
 class Paths(object):

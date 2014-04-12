@@ -1,7 +1,7 @@
 # vi: ts=4 expandtab
 #
 #    Copyright (C) 2012 Canonical Ltd.
-#    Copyright (C) 2012 Hewlett-Packard Development Company, L.P.
+#    Copyright (C) 2012, 2013 Hewlett-Packard Development Company, L.P.
 #    Copyright (C) 2012 Yahoo! Inc.
 #
 #    Author: Scott Moser <scott.moser@canonical.com>
@@ -38,7 +38,8 @@ from cloudinit.distros.parsers import hosts
 
 OSFAMILIES = {
     'debian': ['debian', 'ubuntu'],
-    'redhat': ['fedora', 'rhel']
+    'redhat': ['fedora', 'rhel'],
+    'suse': ['sles']
 }
 
 LOG = logging.getLogger(__name__)
@@ -46,9 +47,11 @@ LOG = logging.getLogger(__name__)
 
 class Distro(object):
     __metaclass__ = abc.ABCMeta
+
     hosts_fn = "/etc/hosts"
     ci_sudoers_fn = "/etc/sudoers.d/90-cloud-init-users"
     hostname_conf_fn = "/etc/hostname"
+    tz_zone_dir = "/usr/share/zoneinfo"
 
     def __init__(self, name, cfg, paths):
         self._paths = paths
@@ -64,6 +67,13 @@ class Distro(object):
         # In the future use the http://fedorahosted.org/netcf/
         # to write this blob out in a distro format
         raise NotImplementedError()
+
+    def _find_tz_file(self, tz):
+        tz_file = os.path.join(self.tz_zone_dir, str(tz))
+        if not os.path.isfile(tz_file):
+            raise IOError(("Invalid timezone %s,"
+                           " no file found at %s") % (tz, tz_file))
+        return tz_file
 
     def get_option(self, opt_name, default=None):
         return self._cfg.get(opt_name, default)
@@ -142,8 +152,8 @@ class Distro(object):
         try:
             util.subp(['hostname', hostname])
         except util.ProcessExecutionError:
-            util.logexc(LOG, ("Failed to non-persistently adjust"
-                              " the system hostname to %s"), hostname)
+            util.logexc(LOG, "Failed to non-persistently adjust the system "
+                        "hostname to %s", hostname)
 
     @abc.abstractmethod
     def _select_hostname(self, hostname, fqdn):
@@ -200,8 +210,8 @@ class Distro(object):
             try:
                 self._write_hostname(hostname, fn)
             except IOError:
-                util.logexc(LOG, "Failed to write hostname %s to %s",
-                            hostname, fn)
+                util.logexc(LOG, "Failed to write hostname %s to %s", hostname,
+                            fn)
 
         if (sys_hostname and prev_hostname and
             sys_hostname != prev_hostname):
@@ -281,15 +291,16 @@ class Distro(object):
     def get_default_user(self):
         return self.get_option('default_user')
 
-    def create_user(self, name, **kwargs):
+    def add_user(self, name, **kwargs):
         """
-            Creates users for the system using the GNU passwd tools. This
-            will work on an GNU system. This should be overriden on
-            distros where useradd is not desirable or not available.
+        Add a user to the system using standard GNU tools
         """
+        if util.is_user(name):
+            LOG.info("User %s already exists, skipping." % name)
+            return
 
         adduser_cmd = ['useradd', name]
-        x_adduser_cmd = ['useradd', name]
+        log_adduser_cmd = ['useradd', name]
 
         # Since we are creating users, we want to carefully validate the
         # inputs. If something goes wrong, we can end up with a system
@@ -306,63 +317,65 @@ class Distro(object):
             "selinux_user": '--selinux-user',
         }
 
-        adduser_opts_flags = {
+        adduser_flags = {
             "no_user_group": '--no-user-group',
             "system": '--system',
             "no_log_init": '--no-log-init',
-            "no_create_home": "-M",
         }
 
-        redact_fields = ['passwd']
+        redact_opts = ['passwd']
 
-        # Now check the value and create the command
-        for option in kwargs:
-            value = kwargs[option]
-            if option in adduser_opts and value \
-                and isinstance(value, str):
-                adduser_cmd.extend([adduser_opts[option], value])
+        # Check the values and create the command
+        for key, val in kwargs.iteritems():
+
+            if key in adduser_opts and val and isinstance(val, str):
+                adduser_cmd.extend([adduser_opts[key], val])
+
                 # Redact certain fields from the logs
-                if option in redact_fields:
-                    x_adduser_cmd.extend([adduser_opts[option], 'REDACTED'])
+                if key in redact_opts:
+                    log_adduser_cmd.extend([adduser_opts[key], 'REDACTED'])
                 else:
-                    x_adduser_cmd.extend([adduser_opts[option], value])
-            elif option in adduser_opts_flags and value:
-                adduser_cmd.append(adduser_opts_flags[option])
-                # Redact certain fields from the logs
-                if option in redact_fields:
-                    x_adduser_cmd.append('REDACTED')
-                else:
-                    x_adduser_cmd.append(adduser_opts_flags[option])
+                    log_adduser_cmd.extend([adduser_opts[key], val])
 
-        # Default to creating home directory unless otherwise directed
-        #  Also, we do not create home directories for system users.
-        if "no_create_home" not in kwargs and "system" not in kwargs:
-            adduser_cmd.append('-m')
+            elif key in adduser_flags and val:
+                adduser_cmd.append(adduser_flags[key])
+                log_adduser_cmd.append(adduser_flags[key])
 
-        # Create the user
-        if util.is_user(name):
-            LOG.warn("User %s already exists, skipping." % name)
+        # Don't create the home directory if directed so or if the user is a
+        # system user
+        if 'no_create_home' in kwargs or 'system' in kwargs:
+            adduser_cmd.append('-M')
+            log_adduser_cmd.append('-M')
         else:
-            LOG.debug("Adding user named %s", name)
-            try:
-                util.subp(adduser_cmd, logstring=x_adduser_cmd)
-            except Exception as e:
-                util.logexc(LOG, "Failed to create user %s due to error.", e)
-                raise e
+            adduser_cmd.append('-m')
+            log_adduser_cmd.append('-m')
 
-        # Set password if plain-text password provided
+        # Run the command
+        LOG.debug("Adding user %s", name)
+        try:
+            util.subp(adduser_cmd, logstring=log_adduser_cmd)
+        except Exception as e:
+            util.logexc(LOG, "Failed to create user %s", name)
+            raise e
+
+    def create_user(self, name, **kwargs):
+        """
+        Creates users for the system using the GNU passwd tools. This
+        will work on an GNU system. This should be overriden on
+        distros where useradd is not desirable or not available.
+        """
+
+        # Add the user
+        self.add_user(name, **kwargs)
+
+        # Set password if plain-text password provided and non-empty
         if 'plain_text_passwd' in kwargs and kwargs['plain_text_passwd']:
             self.set_passwd(name, kwargs['plain_text_passwd'])
 
         # Default locking down the account.  'lock_passwd' defaults to True.
         # lock account unless lock_password is False.
         if kwargs.get('lock_passwd', True):
-            try:
-                util.subp(['passwd', '--lock', name])
-            except Exception as e:
-                util.logexc(LOG, ("Failed to disable password logins for"
-                            "user %s" % name), e)
-                raise e
+            self.lock_passwd(name)
 
         # Configure sudo access
         if 'sudo' in kwargs:
@@ -375,17 +388,33 @@ class Distro(object):
 
         return True
 
+    def lock_passwd(self, name):
+        """
+        Lock the password of a user, i.e., disable password logins
+        """
+        try:
+            # Need to use the short option name '-l' instead of '--lock'
+            # (which would be more descriptive) since SLES 11 doesn't know
+            # about long names.
+            util.subp(['passwd', '-l', name])
+        except Exception as e:
+            util.logexc(LOG, 'Failed to disable password for user %s', name)
+            raise e
+
     def set_passwd(self, user, passwd, hashed=False):
         pass_string = '%s:%s' % (user, passwd)
         cmd = ['chpasswd']
 
         if hashed:
-            cmd.append('--encrypted')
+            # Need to use the short option name '-e' instead of '--encrypted'
+            # (which would be more descriptive) since SLES 11 doesn't know
+            # about long names.
+            cmd.append('-e')
 
         try:
             util.subp(cmd, pass_string, logstring="chpasswd for %s" % user)
         except Exception as e:
-            util.logexc(LOG, "Failed to set password for %s" % user)
+            util.logexc(LOG, "Failed to set password for %s", user)
             raise e
 
         return True
@@ -427,7 +456,7 @@ class Distro(object):
                     util.append_file(sudo_base, sudoers_contents)
                 LOG.debug("Added '#includedir %s' to %s" % (path, sudo_base))
             except IOError as e:
-                util.logexc(LOG, "Failed to write %s" % sudo_base, e)
+                util.logexc(LOG, "Failed to write %s", sudo_base)
                 raise e
         util.ensure_dir(path, 0750)
 
@@ -478,15 +507,15 @@ class Distro(object):
             try:
                 util.subp(group_add_cmd)
                 LOG.info("Created new group %s" % name)
-            except Exception as e:
-                util.logexc("Failed to create group %s" % name, e)
+            except Exception:
+                util.logexc("Failed to create group %s", name)
 
         # Add members to the group, if so defined
         if len(members) > 0:
             for member in members:
                 if not util.is_user(member):
                     LOG.warn("Unable to add group member '%s' to group '%s'"
-                            "; user does not exist." % (member, name))
+                            "; user does not exist.", member, name)
                     continue
 
                 util.subp(['usermod', '-a', '-G', name, member])

@@ -1,8 +1,10 @@
 # vi: ts=4 expandtab
 #
 #    Copyright (C) 2011 Canonical Ltd.
+#    Copyright (C) 2013 Hewlett-Packard Development Company, L.P.
 #
 #    Author: Scott Moser <scott.moser@canonical.com>
+#    Author: Juerg Haefliger <juerg.haefliger@hp.com>
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License version 3, as
@@ -30,6 +32,7 @@ frequency = PER_ALWAYS
 DEFAULT_CONFIG = {
     'mode': 'auto',
     'devices': ['/'],
+    'ignore_growroot_disabled': False,
 }
 
 
@@ -94,7 +97,7 @@ class ResizeParted(object):
     def resize(self, diskdev, partnum, partdev):
         before = get_size(partdev)
         try:
-            util.subp(["parted", "resizepart", diskdev, partnum])
+            util.subp(["parted", diskdev, "resizepart", partnum])
         except util.ProcessExecutionError as e:
             raise ResizeFailedException(e)
 
@@ -121,15 +124,15 @@ class ResizeGrowPart(object):
             util.subp(["growpart", '--dry-run', diskdev, partnum])
         except util.ProcessExecutionError as e:
             if e.exit_code != 1:
-                util.logexc(LOG, ("Failed growpart --dry-run for (%s, %s)" %
-                                  (diskdev, partnum)))
+                util.logexc(LOG, "Failed growpart --dry-run for (%s, %s)",
+                            diskdev, partnum)
                 raise ResizeFailedException(e)
             return (before, before)
 
         try:
             util.subp(["growpart", diskdev, partnum])
         except util.ProcessExecutionError as e:
-            util.logexc(LOG, "Failed: growpart %s %s" % (diskdev, partnum))
+            util.logexc(LOG, "Failed: growpart %s %s", diskdev, partnum)
             raise ResizeFailedException(e)
 
         return (before, get_size(partdev))
@@ -249,6 +252,12 @@ def handle(_name, cfg, _cloud, log, _args):
         log.debug("growpart disabled: mode=%s" % mode)
         return
 
+    if util.is_false(mycfg.get('ignore_growroot_disabled', False)):
+        if os.path.isfile("/etc/growroot-disabled"):
+            log.debug("growpart disabled: /etc/growroot-disabled exists")
+            log.debug("use ignore_growroot_disabled to ignore")
+            return
+
     devices = util.get_cfg_option_list(cfg, "devices", ["/"])
     if not len(devices):
         log.debug("growpart: empty device list")
@@ -262,11 +271,14 @@ def handle(_name, cfg, _cloud, log, _args):
             raise e
         return
 
-    resized = resize_devices(resizer, devices)
+    resized = util.log_time(logfunc=log.debug, msg="resize_devices",
+                            func=resize_devices, args=(resizer, devices))
     for (entry, action, msg) in resized:
         if action == RESIZE.CHANGED:
             log.info("'%s' resized: %s" % (entry, msg))
         else:
             log.debug("'%s' %s: %s" % (entry, action, msg))
 
-RESIZERS = (('parted', ResizeParted), ('growpart', ResizeGrowPart))
+# LP: 1212444 FIXME re-order and favor ResizeParted
+#RESIZERS = (('growpart', ResizeGrowPart),)
+RESIZERS = (('growpart', ResizeGrowPart), ('parted', ResizeParted))
