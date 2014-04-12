@@ -20,7 +20,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import httplib
 import time
+import urllib
 
 import requests
 from requests import exceptions
@@ -32,9 +34,12 @@ from cloudinit import version
 
 LOG = logging.getLogger(__name__)
 
+NOT_FOUND = httplib.NOT_FOUND
+
 # Check if requests has ssl support (added in requests >= 0.8.8)
 SSL_ENABLED = False
 CONFIG_ENABLED = False  # This was added in 0.7 (but taken out in >=1.0)
+_REQ_VER = None
 try:
     from distutils.version import LooseVersion
     import pkg_resources
@@ -56,6 +61,48 @@ def _cleanurl(url):
         parsed_url[1] = parsed_url[2]
         parsed_url[2] = ''
     return urlunparse(parsed_url)
+
+
+def combine_url(base, *add_ons):
+
+    def combine_single(url, add_on):
+        url_parsed = list(urlparse(url))
+        path = url_parsed[2]
+        if path and not path.endswith("/"):
+            path += "/"
+        path += urllib.quote(str(add_on), safe="/:")
+        url_parsed[2] = path
+        return urlunparse(url_parsed)
+
+    url = base
+    for add_on in add_ons:
+        url = combine_single(url, add_on)
+    return url
+
+
+# Made to have same accessors as UrlResponse so that the
+# read_file_or_url can return this or that object and the
+# 'user' of those objects will not need to know the difference.
+class StringResponse(object):
+    def __init__(self, contents, code=200):
+        self.code = code
+        self.headers = {}
+        self.contents = contents
+        self.url = None
+
+    def ok(self, *args, **kwargs):  # pylint: disable=W0613
+        if self.code != 200:
+            return False
+        return True
+
+    def __str__(self):
+        return self.contents
+
+
+class FileResponse(StringResponse):
+    def __init__(self, path, contents, code=200):
+        StringResponse.__init__(self, contents, code=code)
+        self.url = path
 
 
 class UrlResponse(object):
@@ -101,28 +148,34 @@ class UrlError(IOError):
             self.headers = {}
 
 
+def _get_ssl_args(url, ssl_details):
+    ssl_args = {}
+    scheme = urlparse(url).scheme  # pylint: disable=E1101
+    if scheme == 'https' and ssl_details:
+        if not SSL_ENABLED:
+            LOG.warn("SSL is not supported in requests v%s, "
+                     "cert. verification can not occur!", _REQ_VER)
+        else:
+            if 'ca_certs' in ssl_details and ssl_details['ca_certs']:
+                ssl_args['verify'] = ssl_details['ca_certs']
+            else:
+                ssl_args['verify'] = True
+            if 'cert_file' in ssl_details and 'key_file' in ssl_details:
+                ssl_args['cert'] = [ssl_details['cert_file'],
+                                    ssl_details['key_file']]
+            elif 'cert_file' in ssl_details:
+                ssl_args['cert'] = str(ssl_details['cert_file'])
+    return ssl_args
+
+
 def readurl(url, data=None, timeout=None, retries=0, sec_between=1,
             headers=None, headers_cb=None, ssl_details=None,
-            check_status=True, allow_redirects=True):
+            check_status=True, allow_redirects=True, exception_cb=None):
     url = _cleanurl(url)
     req_args = {
         'url': url,
     }
-    scheme = urlparse(url).scheme  # pylint: disable=E1101
-    if scheme == 'https' and ssl_details:
-        if not SSL_ENABLED:
-            LOG.warn("SSL is not enabled, cert. verification can not occur!")
-        else:
-            if 'ca_certs' in ssl_details and ssl_details['ca_certs']:
-                req_args['verify'] = ssl_details['ca_certs']
-            else:
-                req_args['verify'] = True
-            if 'cert_file' in ssl_details and 'key_file' in ssl_details:
-                req_args['cert'] = [ssl_details['cert_file'],
-                                    ssl_details['key_file']]
-            elif 'cert_file' in ssl_details:
-                req_args['cert'] = str(ssl_details['cert_file'])
-
+    req_args.update(_get_ssl_args(url, ssl_details))
     req_args['allow_redirects'] = allow_redirects
     req_args['method'] = 'GET'
     if timeout is not None:
@@ -153,24 +206,22 @@ def readurl(url, data=None, timeout=None, retries=0, sec_between=1,
         def _cb(url):
             return headers
         headers_cb = _cb
-
     if data:
-        # Do this after the log (it might be large)
         req_args['data'] = data
     if sec_between is None:
         sec_between = -1
+
     excps = []
     # Handle retrying ourselves since the built-in support
     # doesn't handle sleeping between tries...
     for i in range(0, manual_tries):
+        req_args['headers'] = headers_cb(url)
+        filtered_req_args = {}
+        for (k, v) in req_args.items():
+            if k == 'data':
+                continue
+            filtered_req_args[k] = v
         try:
-            req_args['headers'] = headers_cb(url)
-            filtered_req_args = {}
-            for (k, v) in req_args.items():
-                if k == 'data':
-                    continue
-                filtered_req_args[k] = v
-
             LOG.debug("[%s/%s] open '%s' with %s configuration", i,
                       manual_tries, url, filtered_req_args)
 
@@ -196,6 +247,8 @@ def readurl(url, data=None, timeout=None, retries=0, sec_between=1,
                     # ssl exceptions are not going to get fixed by waiting a
                     # few seconds
                     break
+            if exception_cb and not exception_cb(req_args.copy(), excps[-1]):
+                break
             if i + 1 < manual_tries and sec_between > 0:
                 LOG.debug("Please wait %s seconds while we wait to try again",
                           sec_between)
@@ -213,6 +266,7 @@ def wait_for_url(urls, max_wait=None, timeout=None,
     max_wait:  roughly the maximum time to wait before giving up
                The max time is *actually* len(urls)*timeout as each url will
                be tried once and given the timeout provided.
+               a number <= 0 will always result in only one try
     timeout:   the timeout provided to urlopen
     status_cb: call method with string message when a url is not available
     headers_cb: call method with single argument of url to get headers

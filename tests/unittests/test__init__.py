@@ -1,14 +1,10 @@
-import logging
 import os
-import StringIO
-import sys
 
-from mocker import MockerTestCase, ANY, ARGS, KWARGS
+from mocker import MockerTestCase, ARGS, KWARGS
 
 from cloudinit import handlers
 from cloudinit import helpers
 from cloudinit import importer
-from cloudinit import log
 from cloudinit import settings
 from cloudinit import url_helper
 from cloudinit import util
@@ -196,7 +192,7 @@ class TestCmdlineUrl(MockerTestCase):
         mock_readurl = self.mocker.replace(url_helper.readurl,
                                            passthrough=False)
         mock_readurl(url, ARGS, KWARGS)
-        self.mocker.result(util.StringResponse(payload))
+        self.mocker.result(url_helper.StringResponse(payload))
         self.mocker.replay()
 
         self.assertEqual((key, url, None),
@@ -212,7 +208,7 @@ class TestCmdlineUrl(MockerTestCase):
         mock_readurl = self.mocker.replace(url_helper.readurl,
                                            passthrough=False)
         mock_readurl(url, ARGS, KWARGS)
-        self.mocker.result(util.StringResponse(payload))
+        self.mocker.result(url_helper.StringResponse(payload))
         self.mocker.replay()
 
         self.assertEqual((key, url, payload),
@@ -225,7 +221,7 @@ class TestCmdlineUrl(MockerTestCase):
         cmdline = "ro %s=%s bar=1" % (key, url)
 
         self.mocker.replace(url_helper.readurl, passthrough=False)
-        self.mocker.result(util.StringResponse(""))
+        self.mocker.result(url_helper.StringResponse(""))
         self.mocker.replay()
 
         self.assertEqual((None, None, None),
