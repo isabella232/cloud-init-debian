@@ -1,7 +1,7 @@
 # vi: ts=4 expandtab
 #
 #    Copyright (C) 2012 Canonical Ltd.
-#    Copyright (C) 2012 Hewlett-Packard Development Company, L.P.
+#    Copyright (C) 2012, 2013 Hewlett-Packard Development Company, L.P.
 #    Copyright (C) 2012 Yahoo! Inc.
 #
 #    Author: Scott Moser <scott.moser@canonical.com>
@@ -32,6 +32,7 @@ import grp
 import gzip
 import hashlib
 import os
+import os.path
 import platform
 import pwd
 import random
@@ -161,13 +162,13 @@ class SeLinuxGuard(object):
         self.recursive = recursive
 
     def __enter__(self):
-        if self.selinux:
+        if self.selinux and self.selinux.is_selinux_enabled():
             return True
         else:
             return False
 
     def __exit__(self, excp_type, excp_value, excp_traceback):
-        if self.selinux:
+        if self.selinux and self.selinux.is_selinux_enabled():
             path = os.path.realpath(os.path.expanduser(self.path))
             do_restore = False
             try:
@@ -219,8 +220,7 @@ def fork_cb(child_cb, *args):
             child_cb(*args)
             os._exit(0)  # pylint: disable=W0212
         except:
-            logexc(LOG, ("Failed forking and"
-                         " calling callback %s"),
+            logexc(LOG, "Failed forking and calling callback %s",
                    type_utils.obj_name(child_cb))
             os._exit(1)  # pylint: disable=W0212
     else:
@@ -361,11 +361,21 @@ def multi_log(text, console=True, stderr=True,
     if stderr:
         sys.stderr.write(text)
     if console:
-        # Don't use the write_file since
-        # this might be 'sensitive' info (not debug worthy?)
-        with open('/dev/console', 'wb') as wfh:
-            wfh.write(text)
-            wfh.flush()
+        conpath = "/dev/console"
+        if os.path.exists(conpath):
+            with open(conpath, 'wb') as wfh:
+                wfh.write(text)
+                wfh.flush()
+        else:
+            # A container may lack /dev/console (arguably a container bug).  If
+            # it does not exist, then write output to stdout.  this will result
+            # in duplicate stderr and stdout messages if stderr was True.
+            #
+            # even though upstart or systemd might have set up output to go to
+            # /dev/console, the user may have configured elsewhere via
+            # cloud-config 'output'.  If there is /dev/console, messages will
+            # still get there.
+            sys.stdout.write(text)
     if log:
         if text[-1] == "\n":
             log.log(log_level, text[:-1])
@@ -956,6 +966,13 @@ def get_hostname():
     return hostname
 
 
+def gethostbyaddr(ip):
+    try:
+        return socket.gethostbyaddr(ip)[0]
+    except socket.herror:
+        return None
+
+
 def is_resolvable_url(url):
     """determine if this url is resolvable (existing or ip)."""
     return (is_resolvable(urlparse.urlparse(url).hostname))
@@ -1531,6 +1548,14 @@ def shellify(cmdlist, add_header=True):
     return content
 
 
+def strip_prefix_suffix(line, prefix=None, suffix=None):
+    if prefix and line.startswith(prefix):
+        line = line[len(prefix):]
+    if suffix and line.endswith(suffix):
+        line = line[:-len(suffix)]
+    return line
+
+
 def is_container():
     """
     Checks to see if this code running in a container of some sort
@@ -1744,3 +1769,69 @@ def get_mount_info(path, log=LOG):
     mountinfo_path = '/proc/%s/mountinfo' % os.getpid()
     lines = load_file(mountinfo_path).splitlines()
     return parse_mount_info(path, lines, log)
+
+
+def which(program):
+    # Return path of program for execution if found in path
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    _fpath, _ = os.path.split(program)
+    if _fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            path = path.strip('"')
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+
+    return None
+
+
+def log_time(logfunc, msg, func, args=None, kwargs=None, get_uptime=False):
+    if args is None:
+        args = []
+    if kwargs is None:
+        kwargs = {}
+
+    start = time.time()
+
+    ustart = None
+    if get_uptime:
+        try:
+            ustart = float(uptime())
+        except ValueError:
+            pass
+
+    try:
+        ret = func(*args, **kwargs)
+    finally:
+        delta = time.time() - start
+        udelta = None
+        if ustart is not None:
+            try:
+                udelta = float(uptime()) - ustart
+            except ValueError:
+                pass
+
+        tmsg = " took %0.3f seconds" % delta
+        if get_uptime:
+            if isinstance(udelta, (float)):
+                tmsg += " (%0.2f)" % udelta
+            else:
+                tmsg += " (N/A)"
+        try:
+            logfunc(msg + tmsg)
+        except:
+            pass
+    return ret
+
+
+def expand_dotted_devname(dotted):
+    toks = dotted.rsplit(".", 1)
+    if len(toks) > 1:
+        return toks
+    else:
+        return (dotted, None)

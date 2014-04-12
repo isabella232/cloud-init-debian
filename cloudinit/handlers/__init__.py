@@ -1,7 +1,7 @@
 # vi: ts=4 expandtab
 #
 #    Copyright (C) 2012 Canonical Ltd.
-#    Copyright (C) 2012 Hewlett-Packard Development Company, L.P.
+#    Copyright (C) 2012, 2013 Hewlett-Packard Development Company, L.P.
 #    Copyright (C) 2012 Yahoo! Inc.
 #
 #    Author: Scott Moser <scott.moser@canonical.com>
@@ -62,6 +62,7 @@ INCLUSION_TYPES_MAP = {
     '#part-handler': 'text/part-handler',
     '#cloud-boothook': 'text/cloud-boothook',
     '#cloud-config-archive': 'text/cloud-config-archive',
+    '#cloud-config-jsonp': 'text/cloud-config-jsonp',
 }
 
 # Sorted longest first
@@ -117,10 +118,9 @@ def run_part(mod, data, filename, payload, frequency, headers):
         else:
             raise ValueError("Unknown module version %s" % (mod_ver))
     except:
-        util.logexc(LOG, ("Failed calling handler %s (%s, %s, %s)"
-                         " with frequency %s"),
-                    mod, content_type, filename,
-                    mod_ver, frequency)
+        util.logexc(LOG, "Failed calling handler %s (%s, %s, %s) with "
+                    "frequency %s", mod, content_type, filename, mod_ver,
+                    frequency)
 
 
 def call_begin(mod, data, frequency):
@@ -152,14 +152,13 @@ def walker_handle_handler(pdata, _ctype, _filename, payload):
     try:
         mod = fixup_handler(importer.import_module(modname))
         call_begin(mod, pdata['data'], frequency)
-        # Only register and increment
-        # after the above have worked (so we don't if it
-        # fails)
-        handlers.register(mod)
+        # Only register and increment after the above have worked, so we don't
+        # register if it fails starting.
+        handlers.register(mod, initialized=True)
         pdata['handlercount'] = curcount + 1
     except:
-        util.logexc(LOG, ("Failed at registering python file: %s"
-                          " (part handler %s)"), modfname, curcount)
+        util.logexc(LOG, "Failed at registering python file: %s (part "
+                    "handler %s)", modfname, curcount)
 
 
 def _extract_first_or_bytes(blob, size):
