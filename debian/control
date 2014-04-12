@@ -1,7 +1,6 @@
 Source: cloud-init
-Maintainer: Python Applications Packaging Team <python-apps-team@lists.alioth.debian.org>
-Uploaders: Charles Plessy <plessy@debian.org>,
-           Miguel Landaeta <miguel@miguel.cc>,
+Maintainer: Charles Plessy <plessy@debian.org>
+Uploaders: Miguel Landaeta <miguel@miguel.cc>,
            Julien Danjou <acid@debian.org>,
            Thomas Goirand <zigo@debian.org>
 Section: admin
