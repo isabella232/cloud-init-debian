@@ -12,17 +12,17 @@ Build-Depends: debhelper (>= 9),
                pyflakes,
                pylint,
                python,
-               python-configobj,
-               python-jsonpatch,
-               python-oauth,
-               python-serial,
                python-boto (>= 2.3),
                python-cheetah,
-               python-requests,
-               python-yaml,
+               python-configobj,
+               python-jsonpatch,
                python-mocker,
                python-nose,
-               python-setuptools
+               python-oauth,
+               python-serial,
+               python-setuptools,
+               python-requests,
+               python-yaml
 Standards-Version: 3.9.5
 Vcs-Browser: http://anonscm.debian.org/viewvc/python-apps/packages/cloud-init/trunk/
 Vcs-Svn: svn://anonscm.debian.org/python-apps/packages/cloud-init/trunk/
@@ -40,11 +40,11 @@ Depends: lsb-base (>= 4.1+Debian3),
          python-configobj,
          python-jsonpatch,
          python-oauth,
+         python-prettytable,
          python-requests,
          python-serial,
-         python-prettytable,
-         python-yaml,
          python-software-properties,
+         python-yaml,
          ${misc:Depends},
          ${python:Depends}
 Description: initialization system for infrastructure cloud instances
