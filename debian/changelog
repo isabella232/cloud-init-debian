@@ -13,6 +13,8 @@ cloud-init (0.7.5-1) UNRELEASED; urgency=medium
   * Conforms to Policy 3.9.5.
   * Correct installation path for rsyslog config snippet.
     Thanks, Juerg Haefliger <juergh@gmail.com>.  Closes: #707125
+  * Removed debian/patches/adds-google-cloud-engine-source.patch,
+    applied upstream.  Closes: #725384.
 
  -- Charles Plessy <plessy@debian.org>  Sun, 16 Feb 2014 15:47:35 +0900
 
