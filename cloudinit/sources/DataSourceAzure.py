@@ -18,12 +18,14 @@
 
 import base64
 import crypt
+import fnmatch
 import os
 import os.path
 import time
 from xml.dom import minidom
 
 from cloudinit import log as logging
+from cloudinit.settings import PER_ALWAYS
 from cloudinit import sources
 from cloudinit import util
 
@@ -34,6 +36,7 @@ DEFAULT_METADATA = {"instance-id": "iid-AZURE-NODE"}
 AGENT_START = ['service', 'walinuxagent', 'start']
 BOUNCE_COMMAND = ['sh', '-xc',
     "i=$interface; x=0; ifdown $i || x=$?; ifup $i || x=$?; exit $x"]
+DATA_DIR_CLEAN_LIST = ['SharedConfig.xml']
 
 BUILTIN_DS_CONFIG = {
     'agent_command': AGENT_START,
@@ -52,14 +55,15 @@ BUILTIN_CLOUD_CONFIG = {
     'disk_setup': {
         'ephemeral0': {'table_type': 'mbr',
                        'layout': True,
-                       'overwrite': False}
-         },
+                       'overwrite': False},
+        },
     'fs_setup': [{'filesystem': 'ext4',
                   'device': 'ephemeral0.1',
-                  'replace_fs': 'ntfs'}]
+                  'replace_fs': 'ntfs'}],
 }
 
 DS_CFG_PATH = ['datasource', DS_NAME]
+DEF_EPHEMERAL_LABEL = 'Temporary Storage'
 
 
 class DataSourceAzureNet(sources.DataSource):
@@ -101,7 +105,7 @@ class DataSourceAzureNet(sources.DataSource):
             except BrokenAzureDataSource as exc:
                 raise exc
             except util.MountFailedError:
-                LOG.warn("%s was not mountable" % cdev)
+                LOG.warn("%s was not mountable", cdev)
                 continue
 
             (md, self.userdata_raw, cfg, files) = ret
@@ -128,10 +132,26 @@ class DataSourceAzureNet(sources.DataSource):
         user_ds_cfg = util.get_cfg_by_path(self.cfg, DS_CFG_PATH, {})
         self.ds_cfg = util.mergemanydict([user_ds_cfg, self.ds_cfg])
         mycfg = self.ds_cfg
+        ddir = mycfg['data_dir']
+
+        if found != ddir:
+            cached_ovfenv = util.load_file(
+                os.path.join(ddir, 'ovf-env.xml'), quiet=True)
+            if cached_ovfenv != files['ovf-env.xml']:
+                # source was not walinux-agent's datadir, so we have to clean
+                # up so 'wait_for_files' doesn't return early due to stale data
+                cleaned = []
+                for f in [os.path.join(ddir, f) for f in DATA_DIR_CLEAN_LIST]:
+                    if os.path.exists(f):
+                        util.del_file(f)
+                        cleaned.append(f)
+                if cleaned:
+                    LOG.info("removed stale file(s) in '%s': %s",
+                             ddir, str(cleaned))
 
         # walinux agent writes files world readable, but expects
         # the directory to be protected.
-        write_files(mycfg['data_dir'], files, dirmode=0700)
+        write_files(ddir, files, dirmode=0700)
 
         # handle the hostname 'publishing'
         try:
@@ -139,7 +159,7 @@ class DataSourceAzureNet(sources.DataSource):
                                 self.metadata.get('local-hostname'),
                                 mycfg['hostname_bounce'])
         except Exception as e:
-            LOG.warn("Failed publishing hostname: %s" % e)
+            LOG.warn("Failed publishing hostname: %s", e)
             util.logexc(LOG, "handling set_hostname failed")
 
         try:
@@ -149,13 +169,13 @@ class DataSourceAzureNet(sources.DataSource):
             util.logexc(LOG, "agent command '%s' failed.",
                         mycfg['agent_command'])
 
-        shcfgxml = os.path.join(mycfg['data_dir'], "SharedConfig.xml")
+        shcfgxml = os.path.join(ddir, "SharedConfig.xml")
         wait_for = [shcfgxml]
 
         fp_files = []
         for pk in self.cfg.get('_pubkeys', []):
-            bname = pk['fingerprint'] + ".crt"
-            fp_files += [os.path.join(mycfg['data_dir'], bname)]
+            bname = str(pk['fingerprint'] + ".crt")
+            fp_files += [os.path.join(ddir, bname)]
 
         missing = util.log_time(logfunc=LOG.debug, msg="waiting for files",
                                 func=wait_for_files,
@@ -169,11 +189,20 @@ class DataSourceAzureNet(sources.DataSource):
             try:
                 self.metadata['instance-id'] = iid_from_shared_config(shcfgxml)
             except ValueError as e:
-                LOG.warn("failed to get instance id in %s: %s" % (shcfgxml, e))
+                LOG.warn("failed to get instance id in %s: %s", shcfgxml, e)
 
         pubkeys = pubkeys_from_crt_files(fp_files)
-
         self.metadata['public-keys'] = pubkeys
+
+        found_ephemeral = find_ephemeral_disk()
+        if found_ephemeral:
+            self.ds_cfg['disk_aliases']['ephemeral0'] = found_ephemeral
+            LOG.debug("using detected ephemeral0 of %s", found_ephemeral)
+
+        cc_modules_override = support_new_ephemeral(self.sys_cfg)
+        if cc_modules_override:
+            self.cfg['cloud_config_modules'] = cc_modules_override
+
         return True
 
     def device_name_to_device(self, name):
@@ -181,6 +210,92 @@ class DataSourceAzureNet(sources.DataSource):
 
     def get_config_obj(self):
         return self.cfg
+
+
+def count_files(mp):
+    return len(fnmatch.filter(os.listdir(mp), '*[!cdrom]*'))
+
+
+def find_ephemeral_part():
+    """
+    Locate the default ephmeral0.1 device. This will be the first device
+    that has a LABEL of DEF_EPHEMERAL_LABEL and is a NTFS device. If Azure
+    gets more ephemeral devices, this logic will only identify the first
+    such device.
+    """
+    c_label_devs = util.find_devs_with("LABEL=%s" % DEF_EPHEMERAL_LABEL)
+    c_fstype_devs = util.find_devs_with("TYPE=ntfs")
+    for dev in c_label_devs:
+        if dev in c_fstype_devs:
+            return dev
+    return None
+
+
+def find_ephemeral_disk():
+    """
+    Get the ephemeral disk.
+    """
+    part_dev = find_ephemeral_part()
+    if part_dev and str(part_dev[-1]).isdigit():
+        return part_dev[:-1]
+    elif part_dev:
+        return part_dev
+    return None
+
+
+def support_new_ephemeral(cfg):
+    """
+    Windows Azure makes ephemeral devices ephemeral to boot; a ephemeral device
+    may be presented as a fresh device, or not.
+
+    Since the knowledge of when a disk is supposed to be plowed under is
+    specific to Windows Azure, the logic resides here in the datasource. When a
+    new ephemeral device is detected, cloud-init overrides the default
+    frequency for both disk-setup and mounts for the current boot only.
+    """
+    device = find_ephemeral_part()
+    if not device:
+        LOG.debug("no default fabric formated ephemeral0.1 found")
+        return None
+    LOG.debug("fabric formated ephemeral0.1 device at %s", device)
+
+    file_count = 0
+    try:
+        file_count = util.mount_cb(device, count_files)
+    except:
+        return None
+    LOG.debug("fabric prepared ephmeral0.1 has %s files on it", file_count)
+
+    if file_count >= 1:
+        LOG.debug("fabric prepared ephemeral0.1 will be preserved")
+        return None
+    else:
+        # if device was already mounted, then we need to unmount it
+        # race conditions could allow for a check-then-unmount
+        # to have a false positive. so just unmount and then check.
+        try:
+            util.subp(['umount', device])
+        except util.ProcessExecutionError as e:
+            if device in util.mounts():
+                LOG.warn("Failed to unmount %s, will not reformat.", device)
+                LOG.debug("Failed umount: %s", e)
+                return None
+
+    LOG.debug("cloud-init will format ephemeral0.1 this boot.")
+    LOG.debug("setting disk_setup and mounts modules 'always' for this boot")
+
+    cc_modules = cfg.get('cloud_config_modules')
+    if not cc_modules:
+        return None
+
+    mod_list = []
+    for mod in cc_modules:
+        if mod in ("disk_setup", "mounts"):
+            mod_list.append([mod, PER_ALWAYS])
+            LOG.debug("set module '%s' to 'always' for this boot", mod)
+        else:
+            mod_list.append(mod)
+    return mod_list
 
 
 def handle_set_hostname(enabled, hostname, cfg):
@@ -247,10 +362,10 @@ def pubkeys_from_crt_files(flist):
         try:
             pubkeys.append(crtfile_to_pubkey(fname))
         except util.ProcessExecutionError:
-            errors.extend(fname)
+            errors.append(fname)
 
     if errors:
-        LOG.warn("failed to convert the crt files to pubkey: %s" % errors)
+        LOG.warn("failed to convert the crt files to pubkey: %s", errors)
 
     return pubkeys
 
@@ -281,7 +396,7 @@ def write_files(datadir, files, dirmode=None):
 def invoke_agent(cmd):
     # this is a function itself to simplify patching it for test
     if cmd:
-        LOG.debug("invoking agent: %s" % cmd)
+        LOG.debug("invoking agent: %s", cmd)
         util.subp(cmd, shell=(not isinstance(cmd, list)))
     else:
         LOG.debug("not invoking agent")
@@ -328,7 +443,7 @@ def load_azure_ovf_pubkeys(sshnode):
             continue
         cur = {'fingerprint': "", 'path': ""}
         for child in pk_node.childNodes:
-            if (child.nodeType == text_node or not child.localName):
+            if child.nodeType == text_node or not child.localName:
                 continue
 
             name = child.localName.lower()
@@ -414,7 +529,7 @@ def read_azure_ovf(contents):
 
         # we accept either UserData or CustomData.  If both are present
         # then behavior is undefined.
-        if (name == "userdata" or name == "customdata"):
+        if name == "userdata" or name == "customdata":
             if attrs.get('encoding') in (None, "base64"):
                 ud = base64.b64decode(''.join(value.split()))
             else:

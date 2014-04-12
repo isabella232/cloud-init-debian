@@ -26,16 +26,19 @@ from StringIO import StringIO
 
 import contextlib
 import copy as obj_copy
+import ctypes
 import errno
 import glob
 import grp
 import gzip
 import hashlib
+import json
 import os
 import os.path
 import platform
 import pwd
 import random
+import re
 import shutil
 import socket
 import stat
@@ -70,31 +73,6 @@ FN_ALLOWED = ('_-.()' + string.digits + string.ascii_letters)
 
 # Helper utils to see if running in a container
 CONTAINER_TESTS = ['running-in-container', 'lxc-is-container']
-
-
-# Made to have same accessors as UrlResponse so that the
-# read_file_or_url can return this or that object and the
-# 'user' of those objects will not need to know the difference.
-class StringResponse(object):
-    def __init__(self, contents, code=200):
-        self.code = code
-        self.headers = {}
-        self.contents = contents
-        self.url = None
-
-    def ok(self, *args, **kwargs):  # pylint: disable=W0613
-        if self.code != 200:
-            return False
-        return True
-
-    def __str__(self):
-        return self.contents
-
-
-class FileResponse(StringResponse):
-    def __init__(self, path, contents, code=200):
-        StringResponse.__init__(self, contents, code=code)
-        self.url = path
 
 
 class ProcessExecutionError(IOError):
@@ -170,6 +148,8 @@ class SeLinuxGuard(object):
     def __exit__(self, excp_type, excp_value, excp_traceback):
         if self.selinux and self.selinux.is_selinux_enabled():
             path = os.path.realpath(os.path.expanduser(self.path))
+            # path should be a string, not unicode
+            path = str(path)
             do_restore = False
             try:
                 # See if even worth restoring??
@@ -383,6 +363,15 @@ def multi_log(text, console=True, stderr=True,
             log.log(log_level, text)
 
 
+def load_json(text, root_types=(dict,)):
+    decoded = json.loads(text)
+    if not isinstance(decoded, tuple(root_types)):
+        expected_types = ", ".join([str(t) for t in root_types])
+        raise TypeError("(%s) root types expected, got %s instead"
+                        % (expected_types, type(decoded)))
+    return decoded
+
+
 def is_ipv4(instr):
     """determine if input string is a ipv4 address. return boolean."""
     toks = instr.split('.')
@@ -390,11 +379,11 @@ def is_ipv4(instr):
         return False
 
     try:
-        toks = [x for x in toks if (int(x) < 256 and int(x) > 0)]
+        toks = [x for x in toks if int(x) < 256 and int(x) >= 0]
     except:
         return False
 
-    return (len(toks) == 4)
+    return len(toks) == 4
 
 
 def get_cfg_option_bool(yobj, key, default=False):
@@ -606,18 +595,28 @@ def del_dir(path):
     shutil.rmtree(path)
 
 
-def runparts(dirp, skip_no_exist=True):
+def runparts(dirp, skip_no_exist=True, exe_prefix=None):
     if skip_no_exist and not os.path.isdir(dirp):
         return
 
     failed = []
     attempted = []
+
+    if exe_prefix is None:
+        prefix = []
+    elif isinstance(exe_prefix, str):
+        prefix = [str(exe_prefix)]
+    elif isinstance(exe_prefix, list):
+        prefix = exe_prefix
+    else:
+        raise TypeError("exe_prefix must be None, str, or list")
+
     for exe_name in sorted(os.listdir(dirp)):
         exe_path = os.path.join(dirp, exe_name)
         if os.path.isfile(exe_path) and os.access(exe_path, os.X_OK):
             attempted.append(exe_path)
             try:
-                subp([exe_path], capture=False)
+                subp(prefix + [exe_path], capture=False)
             except ProcessExecutionError as e:
                 logexc(LOG, "Failed running %s [%s]", exe_path, e.exit_code)
                 failed.append(e)
@@ -637,8 +636,8 @@ def read_optional_seed(fill, base="", ext="", timeout=5):
         fill['user-data'] = ud
         fill['meta-data'] = md
         return True
-    except IOError as e:
-        if e.errno == errno.ENOENT:
+    except url_helper.UrlError as e:
+        if e.code == url_helper.NOT_FOUND:
             return False
         raise
 
@@ -677,7 +676,7 @@ def fetch_ssl_details(paths=None):
 
 def read_file_or_url(url, timeout=5, retries=10,
                      headers=None, data=None, sec_between=1, ssl_details=None,
-                     headers_cb=None):
+                     headers_cb=None, exception_cb=None):
     url = url.lstrip()
     if url.startswith("/"):
         url = "file://%s" % url
@@ -685,7 +684,14 @@ def read_file_or_url(url, timeout=5, retries=10,
         if data:
             LOG.warn("Unable to post data to file resource %s", url)
         file_path = url[len("file://"):]
-        return FileResponse(file_path, contents=load_file(file_path))
+        try:
+            contents = load_file(file_path)
+        except IOError as e:
+            code = e.errno
+            if e.errno == errno.ENOENT:
+                code = url_helper.NOT_FOUND
+            raise url_helper.UrlError(cause=e, code=code, headers=None)
+        return url_helper.FileResponse(file_path, contents=contents)
     else:
         return url_helper.readurl(url,
                                   timeout=timeout,
@@ -694,7 +700,8 @@ def read_file_or_url(url, timeout=5, retries=10,
                                   headers_cb=headers_cb,
                                   data=data,
                                   sec_between=sec_between,
-                                  ssl_details=ssl_details)
+                                  ssl_details=ssl_details,
+                                  exception_cb=exception_cb)
 
 
 def load_yaml(blob, default=None, allowed=(dict,)):
@@ -863,8 +870,8 @@ def get_fqdn_from_hosts(hostname, filename="/etc/hosts"):
         IP_address canonical_hostname [aliases...]
 
       Fields of the entry are separated by any number of  blanks  and/or  tab
-      characters.  Text  from	a "#" character until the end of the line is a
-      comment, and is ignored.	 Host  names  may  contain  only  alphanumeric
+      characters.  Text  from a "#" character until the end of the line is a
+      comment, and is ignored. Host  names  may  contain  only  alphanumeric
       characters, minus signs ("-"), and periods (".").  They must begin with
       an  alphabetic  character  and  end  with  an  alphanumeric  character.
       Optional aliases provide for name changes, alternate spellings, shorter
@@ -948,7 +955,7 @@ def is_resolvable(name):
                 pass
         _DNS_REDIRECT_IP = badips
         if badresults:
-            LOG.debug("detected dns redirection: %s" % badresults)
+            LOG.debug("detected dns redirection: %s", badresults)
 
     try:
         result = socket.getaddrinfo(name, None)
@@ -975,7 +982,7 @@ def gethostbyaddr(ip):
 
 def is_resolvable_url(url):
     """determine if this url is resolvable (existing or ip)."""
-    return (is_resolvable(urlparse.urlparse(url).hostname))
+    return is_resolvable(urlparse.urlparse(url).hostname)
 
 
 def search_for_mirror(candidates):
@@ -1300,11 +1307,26 @@ def mounts():
     mounted = {}
     try:
         # Go through mounts to see what is already mounted
-        mount_locs = load_file("/proc/mounts").splitlines()
+        if os.path.exists("/proc/mounts"):
+            mount_locs = load_file("/proc/mounts").splitlines()
+            method = 'proc'
+        else:
+            (mountoutput, _err) = subp("mount")
+            mount_locs = mountoutput.splitlines()
+            method = 'mount'
+        mountre = r'^(/dev/[\S]+) on (/.*) \((.+), .+, (.+)\)$'
         for mpline in mount_locs:
-            # Format at: man fstab
+            # Linux: /dev/sda1 on /boot type ext4 (rw,relatime,data=ordered)
+            # FreeBSD: /dev/vtbd0p2 on / (ufs, local, journaled soft-updates)
             try:
-                (dev, mp, fstype, opts, _freq, _passno) = mpline.split()
+                if method == 'proc':
+                    (dev, mp, fstype, opts, _freq, _passno) = mpline.split()
+                else:
+                    m = re.search(mountre, mpline)
+                    dev = m.group(1)
+                    mp = m.group(2)
+                    fstype = m.group(3)
+                    opts = m.group(4)
             except:
                 continue
             # If the name of the mount point contains spaces these
@@ -1315,9 +1337,9 @@ def mounts():
                 'mountpoint': mp,
                 'opts': opts,
             }
-        LOG.debug("Fetched %s mounts from %s", mounted, "/proc/mounts")
+        LOG.debug("Fetched %s mounts from %s", mounted, method)
     except (IOError, OSError):
-        logexc(LOG, "Failed fetching mount points from /proc/mounts")
+        logexc(LOG, "Failed fetching mount points")
     return mounted
 
 
@@ -1373,8 +1395,10 @@ def get_builtin_cfg():
     return obj_copy.deepcopy(CFG_BUILTIN)
 
 
-def sym_link(source, link):
-    LOG.debug("Creating symbolic link from %r => %r" % (link, source))
+def sym_link(source, link, force=False):
+    LOG.debug("Creating symbolic link from %r => %r", link, source)
+    if force and os.path.exists(link):
+        del_file(link)
     os.symlink(source, link)
 
 
@@ -1402,12 +1426,27 @@ def time_rfc2822():
 
 def uptime():
     uptime_str = '??'
+    method = 'unknown'
     try:
-        contents = load_file("/proc/uptime").strip()
-        if contents:
-            uptime_str = contents.split()[0]
+        if os.path.exists("/proc/uptime"):
+            method = '/proc/uptime'
+            contents = load_file("/proc/uptime").strip()
+            if contents:
+                uptime_str = contents.split()[0]
+        else:
+            method = 'ctypes'
+            libc = ctypes.CDLL('/lib/libc.so.7')
+            size = ctypes.c_size_t()
+            buf = ctypes.c_int()
+            size.value = ctypes.sizeof(buf)
+            libc.sysctlbyname("kern.boottime", ctypes.byref(buf),
+                              ctypes.byref(size), None, 0)
+            now = time.time()
+            bootup = buf.value
+            uptime_str = now - bootup
+
     except:
-        logexc(LOG, "Unable to read uptime from /proc/uptime")
+        logexc(LOG, "Unable to read uptime using method: %s" % method)
     return uptime_str
 
 
@@ -1746,6 +1785,19 @@ def parse_mtab(path):
     return None
 
 
+def parse_mount(path):
+    (mountoutput, _err) = subp("mount")
+    mount_locs = mountoutput.splitlines()
+    for line in mount_locs:
+        m = re.search(r'^(/dev/[\S]+) on (/.*) \((.+), .+, (.+)\)$', line)
+        devpth = m.group(1)
+        mount_point = m.group(2)
+        fs_type = m.group(3)
+        if mount_point == path:
+            return devpth, fs_type, mount_point
+    return None
+
+
 def get_mount_info(path, log=LOG):
     # Use /proc/$$/mountinfo to find the device where path is mounted.
     # This is done because with a btrfs filesystem using os.stat(path)
@@ -1779,8 +1831,10 @@ def get_mount_info(path, log=LOG):
     if os.path.exists(mountinfo_path):
         lines = load_file(mountinfo_path).splitlines()
         return parse_mount_info(path, lines, log)
-    else:
+    elif os.path.exists("/etc/mtab"):
         return parse_mtab(path)
+    else:
+        return parse_mount(path)
 
 
 def which(program):
@@ -1793,7 +1847,7 @@ def which(program):
         if is_exe(program):
             return program
     else:
-        for path in os.environ["PATH"].split(os.pathsep):
+        for path in os.environ.get("PATH", "").split(os.pathsep):
             path = path.strip('"')
             exe_file = os.path.join(path, program)
             if is_exe(exe_file):
@@ -1847,3 +1901,28 @@ def expand_dotted_devname(dotted):
         return toks
     else:
         return (dotted, None)
+
+
+def pathprefix2dict(base, required=None, optional=None, delim=os.path.sep):
+    # return a dictionary populated with keys in 'required' and 'optional'
+    # by reading files in prefix + delim + entry
+    if required is None:
+        required = []
+    if optional is None:
+        optional = []
+
+    missing = []
+    ret = {}
+    for f in required + optional:
+        try:
+            ret[f] = load_file(base + delim + f, quiet=False)
+        except IOError as e:
+            if e.errno != errno.ENOENT:
+                raise
+            if f in required:
+                missing.append(f)
+
+    if len(missing):
+        raise ValueError("Missing required files: %s", ','.join(missing))
+
+    return ret

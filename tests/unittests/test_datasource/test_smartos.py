@@ -23,10 +23,13 @@
 #
 
 import base64
-from cloudinit import helpers
+from cloudinit import helpers as c_helpers
 from cloudinit.sources import DataSourceSmartOS
-
-from mocker import MockerTestCase
+from tests.unittests import helpers
+import os
+import os.path
+import re
+import stat
 import uuid
 
 MOCK_RETURNS = {
@@ -35,7 +38,12 @@ MOCK_RETURNS = {
     'disable_iptables_flag': None,
     'enable_motd_sys_info': None,
     'test-var1': 'some data',
-    'user-data': '\n'.join(['#!/bin/sh', '/bin/true', '']),
+    'cloud-init:user-data': '\n'.join(['#!/bin/sh', '/bin/true', '']),
+    'sdc:datacenter_name': 'somewhere2',
+    'sdc:operator-script': '\n'.join(['bin/true', '']),
+    'sdc:vendor-data': '\n'.join(['VENDOR_DATA', '']),
+    'user-data': '\n'.join(['something', '']),
+    'user-script': '\n'.join(['/bin/true', '']),
 }
 
 DMI_DATA_RETURN = (str(uuid.uuid4()), 'smartdc')
@@ -97,20 +105,36 @@ class MockSerial(object):
             yield '\n'
 
 
-class TestSmartOSDataSource(MockerTestCase):
+class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
     def setUp(self):
+        helpers.FilesystemMockingTestCase.setUp(self)
+
         # makeDir comes from MockerTestCase
         self.tmp = self.makeDir()
+        self.legacy_user_d = self.makeDir()
+
+        # If you should want to watch the logs...
+        self._log = None
+        self._log_file = None
+        self._log_handler = None
 
         # patch cloud_dir, so our 'seed_dir' is guaranteed empty
-        self.paths = helpers.Paths({'cloud_dir': self.tmp})
+        self.paths = c_helpers.Paths({'cloud_dir': self.tmp})
 
         self.unapply = []
         super(TestSmartOSDataSource, self).setUp()
 
     def tearDown(self):
+        helpers.FilesystemMockingTestCase.tearDown(self)
+        if self._log_handler and self._log:
+            self._log.removeHandler(self._log_handler)
         apply_patches([i for i in reversed(self.unapply)])
         super(TestSmartOSDataSource, self).tearDown()
+
+    def _patchIn(self, root):
+        self.restore()
+        self.patchOS(root)
+        self.patchUtils(root)
 
     def apply_patches(self, patches):
         ret = apply_patches(patches)
@@ -131,6 +155,11 @@ class TestSmartOSDataSource(MockerTestCase):
         def _dmi_data():
             return dmi_data
 
+        def _os_uname():
+            # LP: #1243287. tests assume this runs, but running test on
+            # arm would cause them all to fail.
+            return ('LINUX', 'NODENAME', 'RELEASE', 'VERSION', 'x86_64')
+
         if sys_cfg is None:
             sys_cfg = {}
 
@@ -138,8 +167,10 @@ class TestSmartOSDataSource(MockerTestCase):
             sys_cfg['datasource'] = sys_cfg.get('datasource', {})
             sys_cfg['datasource']['SmartOS'] = ds_cfg
 
+        self.apply_patches([(mod, 'LEGACY_USER_D', self.legacy_user_d)])
         self.apply_patches([(mod, 'get_serial', _get_serial)])
         self.apply_patches([(mod, 'dmi_data', _dmi_data)])
+        self.apply_patches([(os, 'uname', _os_uname)])
         dsrc = mod.DataSourceSmartOS(sys_cfg, distro=None,
                                      paths=self.paths)
         return dsrc
@@ -194,7 +225,7 @@ class TestSmartOSDataSource(MockerTestCase):
         # metadata provided base64_all of true
         my_returns = MOCK_RETURNS.copy()
         my_returns['base64_all'] = "true"
-        for k in ('hostname', 'user-data'):
+        for k in ('hostname', 'cloud-init:user-data'):
             my_returns[k] = base64.b64encode(my_returns[k])
 
         dsrc = self._get_ds(mockdata=my_returns)
@@ -202,7 +233,7 @@ class TestSmartOSDataSource(MockerTestCase):
         self.assertTrue(ret)
         self.assertEquals(MOCK_RETURNS['hostname'],
                           dsrc.metadata['local-hostname'])
-        self.assertEquals(MOCK_RETURNS['user-data'],
+        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
                           dsrc.userdata_raw)
         self.assertEquals(MOCK_RETURNS['root_authorized_keys'],
                           dsrc.metadata['public-keys'])
@@ -213,9 +244,9 @@ class TestSmartOSDataSource(MockerTestCase):
 
     def test_b64_userdata(self):
         my_returns = MOCK_RETURNS.copy()
-        my_returns['b64-user-data'] = "true"
+        my_returns['b64-cloud-init:user-data'] = "true"
         my_returns['b64-hostname'] = "true"
-        for k in ('hostname', 'user-data'):
+        for k in ('hostname', 'cloud-init:user-data'):
             my_returns[k] = base64.b64encode(my_returns[k])
 
         dsrc = self._get_ds(mockdata=my_returns)
@@ -223,7 +254,8 @@ class TestSmartOSDataSource(MockerTestCase):
         self.assertTrue(ret)
         self.assertEquals(MOCK_RETURNS['hostname'],
                           dsrc.metadata['local-hostname'])
-        self.assertEquals(MOCK_RETURNS['user-data'], dsrc.userdata_raw)
+        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+                          dsrc.userdata_raw)
         self.assertEquals(MOCK_RETURNS['root_authorized_keys'],
                           dsrc.metadata['public-keys'])
 
@@ -238,13 +270,123 @@ class TestSmartOSDataSource(MockerTestCase):
         self.assertTrue(ret)
         self.assertEquals(MOCK_RETURNS['hostname'],
                           dsrc.metadata['local-hostname'])
-        self.assertEquals(MOCK_RETURNS['user-data'], dsrc.userdata_raw)
+        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+                          dsrc.userdata_raw)
 
     def test_userdata(self):
         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
         ret = dsrc.get_data()
         self.assertTrue(ret)
-        self.assertEquals(MOCK_RETURNS['user-data'], dsrc.userdata_raw)
+        self.assertEquals(MOCK_RETURNS['user-data'],
+                          dsrc.metadata['legacy-user-data'])
+        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+                          dsrc.userdata_raw)
+
+    def test_sdc_scripts(self):
+        dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertEquals(MOCK_RETURNS['user-script'],
+                          dsrc.metadata['user-script'])
+
+        legacy_script_f = "%s/user-script" % self.legacy_user_d
+        self.assertTrue(os.path.exists(legacy_script_f))
+        self.assertTrue(os.path.islink(legacy_script_f))
+        user_script_perm = oct(os.stat(legacy_script_f)[stat.ST_MODE])[-3:]
+        self.assertEquals(user_script_perm, '700')
+
+    def test_scripts_shebanged(self):
+        dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertEquals(MOCK_RETURNS['user-script'],
+                          dsrc.metadata['user-script'])
+
+        legacy_script_f = "%s/user-script" % self.legacy_user_d
+        self.assertTrue(os.path.exists(legacy_script_f))
+        self.assertTrue(os.path.islink(legacy_script_f))
+        shebang = None
+        with open(legacy_script_f, 'r') as f:
+            shebang = f.readlines()[0].strip()
+        self.assertEquals(shebang, "#!/bin/bash")
+        user_script_perm = oct(os.stat(legacy_script_f)[stat.ST_MODE])[-3:]
+        self.assertEquals(user_script_perm, '700')
+
+    def test_scripts_shebang_not_added(self):
+        """
+            Test that the SmartOS requirement that plain text scripts
+            are executable. This test makes sure that plain texts scripts
+            with out file magic have it added appropriately by cloud-init.
+        """
+
+        my_returns = MOCK_RETURNS.copy()
+        my_returns['user-script'] = '\n'.join(['#!/usr/bin/perl',
+                                               'print("hi")', ''])
+
+        dsrc = self._get_ds(mockdata=my_returns)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertEquals(my_returns['user-script'],
+                          dsrc.metadata['user-script'])
+
+        legacy_script_f = "%s/user-script" % self.legacy_user_d
+        self.assertTrue(os.path.exists(legacy_script_f))
+        self.assertTrue(os.path.islink(legacy_script_f))
+        shebang = None
+        with open(legacy_script_f, 'r') as f:
+            shebang = f.readlines()[0].strip()
+        self.assertEquals(shebang, "#!/usr/bin/perl")
+
+    def test_userdata_removed(self):
+        """
+            User-data in the SmartOS world is supposed to be written to a file
+            each and every boot. This tests to make sure that in the event the
+            legacy user-data is removed, the existing user-data is backed-up and
+            there is no /var/db/user-data left.
+        """
+
+        user_data_f = "%s/mdata-user-data" % self.legacy_user_d
+        with open(user_data_f, 'w') as f:
+            f.write("PREVIOUS")
+
+        my_returns = MOCK_RETURNS.copy()
+        del my_returns['user-data']
+
+        dsrc = self._get_ds(mockdata=my_returns)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertFalse(dsrc.metadata.get('legacy-user-data'))
+
+        found_new = False
+        for root, _dirs, files in os.walk(self.legacy_user_d):
+            for name in files:
+                name_f = os.path.join(root, name)
+                permissions = oct(os.stat(name_f)[stat.ST_MODE])[-3:]
+                if re.match(r'.*\/mdata-user-data$', name_f):
+                    found_new = True
+                    print name_f
+                    self.assertEquals(permissions, '400')
+
+        self.assertFalse(found_new)
+
+    def test_vendor_data_not_default(self):
+        dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertEquals(MOCK_RETURNS['sdc:vendor-data'],
+                          dsrc.metadata['vendor-data'])
+
+    def test_default_vendor_data(self):
+        my_returns = MOCK_RETURNS.copy()
+        def_op_script = my_returns['sdc:vendor-data']
+        del my_returns['sdc:vendor-data']
+        dsrc = self._get_ds(mockdata=my_returns)
+        ret = dsrc.get_data()
+        self.assertTrue(ret)
+        self.assertNotEquals(def_op_script, dsrc.metadata['vendor-data'])
+
+        # we expect default vendor-data is a boothook
+        self.assertTrue(dsrc.vendordata_raw.startswith("#cloud-boothook"))
 
     def test_disable_iptables_flag(self):
         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
