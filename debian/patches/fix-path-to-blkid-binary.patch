@@ -5,7 +5,7 @@ Last-Update: 2013-05-28
 
 --- cloud-init-0.7.2.orig/cloudinit/util.py
 +++ cloud-init-0.7.2/cloudinit/util.py
-@@ -998,7 +998,7 @@ def find_devs_with(criteria=None, oforma
+@@ -1022,7 +1022,7 @@ def find_devs_with(criteria=None, oforma
        LABEL=<label>
        UUID=<uuid>
      """
