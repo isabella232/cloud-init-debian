@@ -1,4 +1,4 @@
-cloud-init (0.7.5-1) UNRELEASED; urgency=medium
+cloud-init (0.7.5-1) unstable; urgency=medium
 
   * New upstream release
     - adds OpenNebula support, closes: #736148.
@@ -14,7 +14,7 @@ cloud-init (0.7.5-1) UNRELEASED; urgency=medium
   * Build-depend on python-httpretty for the regression tests.
   * Source packages migrated to Git; updated VCS URLs.
 
- -- Charles Plessy <plessy@debian.org>  Sun, 16 Feb 2014 15:47:35 +0900
+ -- Charles Plessy <plessy@debian.org>  Sat, 17 May 2014 14:21:24 +0900
 
 cloud-init (0.7.2-3) unstable; urgency=low
 
