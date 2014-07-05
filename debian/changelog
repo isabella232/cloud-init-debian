@@ -1,8 +1,12 @@
 cloud-init (0.7.6~bzr976-2) unstable; urgency=medium
 
   * Build-depend on iproute2 instead of iproute (Closes: #753695). 
+  * Translation updates:
+    - Portuguese: Américo Monteiro <a_monteiro@gmx.com>, closes: #748520.
+    - German: Chris Leick <c.leick@vollbio.de>,          closes: #750852.
+    - French: Julien Patriarca <leatherface@debian.org>, closes: #749773.
 
- -- Charles Plessy <plessy@debian.org>  Sat, 05 Jul 2014 20:14:37 +0900
+ -- Charles Plessy <plessy@debian.org>  Sat, 05 Jul 2014 20:27:10 +0900
 
 cloud-init (0.7.6~bzr976-1) unstable; urgency=medium
 
