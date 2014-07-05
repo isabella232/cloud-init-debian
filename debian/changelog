@@ -1,3 +1,9 @@
+cloud-init (0.7.6~bzr976-2) unstable; urgency=medium
+
+  * Build-depend on iproute2 instead of iproute (Closes: #753695). 
+
+ -- Charles Plessy <plessy@debian.org>  Sat, 05 Jul 2014 20:14:37 +0900
+
 cloud-init (0.7.6~bzr976-1) unstable; urgency=medium
 
   * New upstream snapshot (Closes: #750314).
