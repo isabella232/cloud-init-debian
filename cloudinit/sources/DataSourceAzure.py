@@ -217,10 +217,15 @@ class DataSourceAzureNet(sources.DataSource):
             LOG.debug("using files cached in %s", ddir)
 
         # azure / hyper-v provides random data here
-        seed = util.load_file("/sys/firmware/acpi/tables/OEM0",
-                              quiet=True, decode=False)
-        if seed:
-            self.metadata['random_seed'] = seed
+        try:
+            seed = util.load_file("/sys/firmware/acpi/tables/OEM0",
+                                  quiet=True, decode=False)
+            if seed:
+                self.metadata['random_seed'] = seed
+
+        # Don't fail if we can't read this file
+        except IOError:
+            pass
 
         # now update ds_cfg to reflect contents pass in config
         user_ds_cfg = util.get_cfg_by_path(self.cfg, DS_CFG_PATH, {})
