@@ -9,7 +9,7 @@ Uploaders:
 Section: admin
 Priority: optional
 Build-Depends:
-  debhelper (>= 9),
+  debhelper (>= 10),
   dh-python,
   dh-systemd,
   iproute2,
