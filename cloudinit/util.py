@@ -1219,7 +1219,7 @@ def find_devs_with(criteria=None, oformat='device',
       LABEL=<label>
       UUID=<uuid>
     """
-    blk_id_cmd = ['blkid']
+    blk_id_cmd = ['/sbin/blkid']
     options = []
     if criteria:
         # Search for block devices with tokens named NAME that
