@@ -1,8 +1,10 @@
+From 555ddf2f690ccbb1bbc11cce733d1018904adb13 Mon Sep 17 00:00:00 2001
 From: Thomas Goirand <zigo@debian.org>
+Date: Mon, 21 Nov 2016 19:10:45 +0100
 Subject: disable-rhel-set-hostname-test
+
 Forwarded: no
 Last-Update: 2013-05-29
-
 ---
  tests/unittests/test_handler/test_handler_set_hostname.py | 1 +
  1 file changed, 1 insertion(+)

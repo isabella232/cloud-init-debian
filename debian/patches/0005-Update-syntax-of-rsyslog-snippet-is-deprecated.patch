@@ -1,9 +1,10 @@
+From 51187eb3f5e64f8e49e9b1c626d5cc8e5d763e42 Mon Sep 17 00:00:00 2001
 From: Charles Plessy <plessy@debian.org>
 Date: Sat, 23 Apr 2016 21:44:34 +0900
-Description: Update syntax of rsyslog snippet ("~" is deprecated).
+Subject: Update syntax of rsyslog snippet ("~" is deprecated).
+
 Bug-Debian: https://bugs.debian.org/791934
 Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1367899
-
 ---
  tools/21-cloudinit.conf | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

@@ -1,16 +1,18 @@
+From c8644e2e78de0fd5f548d66cda156012d07bcae4 Mon Sep 17 00:00:00 2001
 From: Bastian Blank <waldi@debian.org>
-Description: Make Azure datasource run without root
-Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1536961
+Date: Mon, 21 Nov 2016 19:10:46 +0100
+Subject: Make Azure datasource run without root
 
+Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1536961
 ---
  cloudinit/sources/DataSourceAzure.py | 13 +++++++++----
  1 file changed, 9 insertions(+), 4 deletions(-)
 
 diff --git a/cloudinit/sources/DataSourceAzure.py b/cloudinit/sources/DataSourceAzure.py
-index dbc2bb6..2b49b69 100644
+index 22f9004..349988f 100644
 --- a/cloudinit/sources/DataSourceAzure.py
 +++ b/cloudinit/sources/DataSourceAzure.py
-@@ -216,10 +216,15 @@ class DataSourceAzureNet(sources.DataSource):
+@@ -217,10 +217,15 @@ class DataSourceAzureNet(sources.DataSource):
              LOG.debug("using files cached in %s", ddir)
  
          # azure / hyper-v provides random data here
