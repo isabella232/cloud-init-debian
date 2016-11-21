@@ -1,6 +1,7 @@
 cloud-init (0.7.8-49-g9e904bb-1) UNRELEASED; urgency=medium
 
   * New upstream snapshot.
+  * Set maintainer to Debian Cloud Team.
 
  -- Bastian Blank <waldi@debian.org>  Mon, 21 Nov 2016 19:11:44 +0100
 

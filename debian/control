@@ -1,5 +1,5 @@
 Source: cloud-init
-Maintainer: Charles Plessy <plessy@debian.org>
+Maintainer: Debian Cloud Team <debian-cloud@lists.debian.org>
 Uploaders: Bastian Blank <waldi@debian.org>,
            Miguel Landaeta <miguel@miguel.cc>,
            Julien Danjou <acid@debian.org>,
