@@ -1,10 +1,10 @@
-cloud-init (0.7.8-49-g9e904bb-1) UNRELEASED; urgency=medium
+cloud-init (0.7.8-49-g9e904bb-1) unstable; urgency=medium
 
   * New upstream snapshot.
   * Set maintainer to Debian Cloud Team.
   * Use debhelper compat level 10.
 
- -- Bastian Blank <waldi@debian.org>  Mon, 21 Nov 2016 19:11:44 +0100
+ -- Bastian Blank <waldi@debian.org>  Tue, 29 Nov 2016 21:05:36 +0100
 
 cloud-init (0.7.8-1) unstable; urgency=medium
 
