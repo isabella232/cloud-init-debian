@@ -58,7 +58,7 @@ if os.path.isdir(os.path.join(_tdir, ".git")) and which("git"):
         flags = ['--tags']
     cmd = ['git', 'describe'] + flags
 
-    version = tiny_p(cmd).strip()
+    version = tiny_p(cmd).strip().rsplit('/', 1)[-1]
 
     if not version.startswith(src_version):
         sys.stderr.write("git describe version (%s) differs from "
@@ -78,9 +78,8 @@ commit = None
 distance = None
 
 if version_long:
-    info = version_long.partition("-")[2]
-    extra = "-" + info
-    distance, commit = info.split("-")
+    distance, commit = version_long.split("-")[1:3]
+    extra = "-" + distance + "-" + commit
     # remove the 'g' from gHASH
     commit = commit[1:]
 
