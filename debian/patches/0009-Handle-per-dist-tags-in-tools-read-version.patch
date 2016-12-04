@@ -1,0 +1,34 @@
+From b56261e1af51503c869af61b5f04a11c9bc885f3 Mon Sep 17 00:00:00 2001
+From: Bastian Blank <waldi@debian.org>
+Date: Sun, 4 Dec 2016 12:13:49 +0100
+Subject: Handle per-dist tags in tools/read-version
+
+---
+ tools/read-version | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/tools/read-version b/tools/read-version
+index c10f9b4..4799165 100755
+--- a/tools/read-version
++++ b/tools/read-version
+@@ -58,7 +58,7 @@ if os.path.isdir(os.path.join(_tdir, ".git")) and which("git"):
+         flags = ['--tags']
+     cmd = ['git', 'describe'] + flags
+ 
+-    version = tiny_p(cmd).strip()
++    version = tiny_p(cmd).strip().rsplit('/', 1)[-1]
+ 
+     if not version.startswith(src_version):
+         sys.stderr.write("git describe version (%s) differs from "
+@@ -78,9 +78,8 @@ commit = None
+ distance = None
+ 
+ if version_long:
+-    info = version_long.partition("-")[2]
+-    extra = "-" + info
+-    distance, commit = info.split("-")
++    distance, commit = version_long.split("-")[1:3]
++    extra = "-" + distance + "-" + commit
+     # remove the 'g' from gHASH
+     commit = commit[1:]
+ 
