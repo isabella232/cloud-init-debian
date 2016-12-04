@@ -1,4 +1,4 @@
-From 0dbfe38b19eed38a827d8cebe3289653316b812e Mon Sep 17 00:00:00 2001
+From 094e70e26bfd673c94f02a31d5d572d8378a380b Mon Sep 17 00:00:00 2001
 From: Nicolas Braud-Santoni <nicolas@braud-santoni.eu>
 Date: Sat, 24 Sep 2016 22:40:04 +0200
 Subject: sysvinit fs dependencies

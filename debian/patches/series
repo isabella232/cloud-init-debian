@@ -4,6 +4,5 @@
 0004-debian-sources.list.patch
 0005-Update-syntax-of-rsyslog-snippet-is-deprecated.patch
 0006-Skip-test_apt_v3_mirror_search_dns.patch
-0007-Make-examples-ASCII-only.patch
-0008-Skip-Cloudstack-tests-that-expect-network.patch
-0009-sysvinit-fs-dependencies.patch
+0007-Skip-Cloudstack-tests-that-expect-network.patch
+0008-sysvinit-fs-dependencies.patch
