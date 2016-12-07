@@ -1,10 +1,10 @@
-cloud-init (0.7.8-64-g166df60-1) UNRELEASED; urgency=medium
+cloud-init (0.7.8-64-g166df60-1) unstable; urgency=medium
 
   * New upstream snapshot.
   * Adopt upstream changes to cloud.cfg.
   * Use deb.debian.org as primary mirror.
 
- -- Bastian Blank <waldi@debian.org>  Sun, 04 Dec 2016 11:57:35 +0100
+ -- Bastian Blank <waldi@debian.org>  Wed, 07 Dec 2016 13:27:36 +0100
 
 cloud-init (0.7.8-49-g9e904bb-1) unstable; urgency=medium
 
