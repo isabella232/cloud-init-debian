@@ -1,3 +1,9 @@
+cloud-init (0.7.9-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Bastian Blank <bastian.blank@credativ.de>  Wed, 04 Jan 2017 14:07:49 +0100
+
 cloud-init (0.7.8-64-g166df60-1) unstable; urgency=medium
 
   * New upstream snapshot.
