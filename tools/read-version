@@ -98,3 +98,5 @@ else:
     sys.stdout.write(release + "\n")
 
 sys.exit(0)
+
+# vi: ts=4 expandtab

@@ -1,4 +1,4 @@
-From 6bde3742df483177dbf99d061d5619233bb95184 Mon Sep 17 00:00:00 2001
+From a08663c46c1c00dd0fe75244eb4ad441b7f10f86 Mon Sep 17 00:00:00 2001
 From: Nicolas Braud-Santoni <nicolas@braud-santoni.eu>
 Date: Sat, 24 Sep 2016 13:10:17 +0200
 Subject: Skip test_apt_v3_mirror_search_dns
@@ -8,10 +8,10 @@ Subject: Skip test_apt_v3_mirror_search_dns
  1 file changed, 4 insertions(+)
 
 diff --git a/tests/unittests/test_handler/test_handler_apt_source_v3.py b/tests/unittests/test_handler/test_handler_apt_source_v3.py
-index b92a50d..e8e3520 100644
+index 292d3f59..584d0ec2 100644
 --- a/tests/unittests/test_handler/test_handler_apt_source_v3.py
 +++ b/tests/unittests/test_handler/test_handler_apt_source_v3.py
-@@ -949,6 +949,10 @@ deb http://ubuntu.com/ubuntu/ xenial-proposed main""")
+@@ -951,6 +951,10 @@ deb http://ubuntu.com/ubuntu/ xenial-proposed main""")
  
      def test_apt_v3_mirror_search_dns(self):
          """test_apt_v3_mirror_search_dns - Test searching dns patterns"""

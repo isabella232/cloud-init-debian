@@ -1,4 +1,4 @@
-From 96dab4e654cd1c074967aca3d2f647903db7daae Mon Sep 17 00:00:00 2001
+From 32dd02b4cce53db2e39a1ba62806f7db5d152095 Mon Sep 17 00:00:00 2001
 From: Charles Plessy <plessy@debian.org>
 Date: Mon, 21 Nov 2016 19:10:47 +0100
 Subject: debian-sources.list
@@ -9,7 +9,7 @@ Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1627293
  1 file changed, 2 insertions(+), 4 deletions(-)
 
 diff --git a/templates/sources.list.debian.tmpl b/templates/sources.list.debian.tmpl
-index c8043f7..f4188c7 100644
+index c8043f76..f4188c73 100644
 --- a/templates/sources.list.debian.tmpl
 +++ b/templates/sources.list.debian.tmpl
 @@ -26,7 +26,5 @@ deb-src {{mirror}} {{codename}}-updates main contrib non-free

@@ -1,4 +1,4 @@
-From aa9ec126193b45cdb26e346943078f667a9d02dc Mon Sep 17 00:00:00 2001
+From b3a5d92994de8ef21c3c155750977256d8ddfbd3 Mon Sep 17 00:00:00 2001
 From: Thomas Goirand <zigo@debian.org>
 Date: Mon, 21 Nov 2016 19:10:45 +0100
 Subject: disable-rhel-set-hostname-test
@@ -10,10 +10,10 @@ Last-Update: 2013-05-29
  1 file changed, 1 insertion(+)
 
 diff --git a/tests/unittests/test_handler/test_handler_set_hostname.py b/tests/unittests/test_handler/test_handler_set_hostname.py
-index 7effa12..5796e25 100644
+index 4b18de75..a6413e7b 100644
 --- a/tests/unittests/test_handler/test_handler_set_hostname.py
 +++ b/tests/unittests/test_handler/test_handler_set_hostname.py
-@@ -28,6 +28,7 @@ class TestHostname(t_help.FilesystemMockingTestCase):
+@@ -30,6 +30,7 @@ class TestHostname(t_help.FilesystemMockingTestCase):
          return cls(kind, {}, paths)
  
      def test_write_hostname_rhel(self):

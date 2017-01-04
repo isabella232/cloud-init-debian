@@ -1,4 +1,4 @@
-From b56261e1af51503c869af61b5f04a11c9bc885f3 Mon Sep 17 00:00:00 2001
+From e7eaf22eca08e23b55f78e9bf6b1a9158ce9b490 Mon Sep 17 00:00:00 2001
 From: Bastian Blank <waldi@debian.org>
 Date: Sun, 4 Dec 2016 12:13:49 +0100
 Subject: Handle per-dist tags in tools/read-version
@@ -8,7 +8,7 @@ Subject: Handle per-dist tags in tools/read-version
  1 file changed, 3 insertions(+), 4 deletions(-)
 
 diff --git a/tools/read-version b/tools/read-version
-index c10f9b4..4799165 100755
+index 3b30b497..4d227836 100755
 --- a/tools/read-version
 +++ b/tools/read-version
 @@ -58,7 +58,7 @@ if os.path.isdir(os.path.join(_tdir, ".git")) and which("git"):

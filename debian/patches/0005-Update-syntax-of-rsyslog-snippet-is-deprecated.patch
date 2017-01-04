@@ -1,4 +1,4 @@
-From fa6105cc4103f4c426dbd863230db5df4adf7750 Mon Sep 17 00:00:00 2001
+From 37edda3d2603f7bd7dc51c96897570d0fa025891 Mon Sep 17 00:00:00 2001
 From: Charles Plessy <plessy@debian.org>
 Date: Sat, 23 Apr 2016 21:44:34 +0900
 Subject: Update syntax of rsyslog snippet ("~" is deprecated).
@@ -10,7 +10,7 @@ Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1367899
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/tools/21-cloudinit.conf b/tools/21-cloudinit.conf
-index c65325c..150d800 100644
+index c65325c1..150d800f 100644
 --- a/tools/21-cloudinit.conf
 +++ b/tools/21-cloudinit.conf
 @@ -3,4 +3,4 @@
