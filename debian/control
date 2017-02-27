@@ -43,6 +43,7 @@ Architecture: all
 Depends:
   gdisk,
   lsb-release,
+  net-tools,
   ifupdown,
   procps,
   ${misc:Depends},
