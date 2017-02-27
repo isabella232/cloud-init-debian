@@ -1,6 +1,7 @@
 cloud-init (0.7.9-2) unstable; urgency=medium
 
   * Add net-tools as runtime depends (Closes: #853926).
+  * Add depends: on lsb-base.
 
  -- Thomas Goirand <zigo@debian.org>  Thu, 02 Feb 2017 13:23:41 +0000
 

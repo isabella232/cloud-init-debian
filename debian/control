@@ -42,6 +42,7 @@ Package: cloud-init
 Architecture: all
 Depends:
   gdisk,
+  lsb-base,
   lsb-release,
   net-tools,
   ifupdown,
