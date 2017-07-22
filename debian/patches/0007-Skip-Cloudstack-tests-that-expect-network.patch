@@ -1,4 +1,4 @@
-From bec025918032923f451c4ee9c10b9dab683f7e6f Mon Sep 17 00:00:00 2001
+From d7fd4d9f9dfe27b6bd51c473e4296952a6cb90c1 Mon Sep 17 00:00:00 2001
 From: Nicolas Braud-Santoni <nicolas@braud-santoni.eu>
 Date: Sat, 24 Sep 2016 14:51:58 +0200
 Subject: Skip Cloudstack tests that expect network

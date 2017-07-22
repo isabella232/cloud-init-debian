@@ -1,4 +1,4 @@
-From a08663c46c1c00dd0fe75244eb4ad441b7f10f86 Mon Sep 17 00:00:00 2001
+From ad2024baa87a8b3cad4cb2617f0ad15dc94252ab Mon Sep 17 00:00:00 2001
 From: Nicolas Braud-Santoni <nicolas@braud-santoni.eu>
 Date: Sat, 24 Sep 2016 13:10:17 +0200
 Subject: Skip test_apt_v3_mirror_search_dns

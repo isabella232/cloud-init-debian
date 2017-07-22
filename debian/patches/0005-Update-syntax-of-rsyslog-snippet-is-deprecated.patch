@@ -1,4 +1,4 @@
-From 37edda3d2603f7bd7dc51c96897570d0fa025891 Mon Sep 17 00:00:00 2001
+From c59ea0c01273526baf999cf2d56dfbd44fff3b3b Mon Sep 17 00:00:00 2001
 From: Charles Plessy <plessy@debian.org>
 Date: Sat, 23 Apr 2016 21:44:34 +0900
 Subject: Update syntax of rsyslog snippet ("~" is deprecated).

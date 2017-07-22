@@ -1,4 +1,4 @@
-From 4b4297b40034b2797e81b10197f50788c556bc38 Mon Sep 17 00:00:00 2001
+From 4c399fe29af1bbae270b73079ee3e6db0d0df7f8 Mon Sep 17 00:00:00 2001
 From: Bastian Blank <waldi@debian.org>
 Date: Sun, 4 Dec 2016 12:13:49 +0100
 Subject: Drop all unused extended version handling

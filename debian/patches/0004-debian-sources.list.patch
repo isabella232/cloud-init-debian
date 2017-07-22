@@ -1,17 +1,39 @@
-From 32dd02b4cce53db2e39a1ba62806f7db5d152095 Mon Sep 17 00:00:00 2001
+From 1351a2fba9e74492e790f184a36a2fff978a8984 Mon Sep 17 00:00:00 2001
 From: Charles Plessy <plessy@debian.org>
 Date: Mon, 21 Nov 2016 19:10:47 +0100
 Subject: debian-sources.list
 
 Forwarded: https://bugs.launchpad.net/cloud-init/+bug/1627293
 ---
- templates/sources.list.debian.tmpl | 6 ++----
- 1 file changed, 2 insertions(+), 4 deletions(-)
+ templates/sources.list.debian.tmpl | 18 ++++++++----------
+ 1 file changed, 8 insertions(+), 10 deletions(-)
 
 diff --git a/templates/sources.list.debian.tmpl b/templates/sources.list.debian.tmpl
-index c8043f76..f4188c73 100644
+index c8043f76..8b119ad4 100644
 --- a/templates/sources.list.debian.tmpl
 +++ b/templates/sources.list.debian.tmpl
+@@ -10,15 +10,15 @@
+ 
+ # See http://www.debian.org/releases/stable/i386/release-notes/ch-upgrading.html
+ # for how to upgrade to newer versions of the distribution.
+-deb {{mirror}} {{codename}} main contrib non-free
+-deb-src {{mirror}} {{codename}} main contrib non-free
++deb {{mirror}} {{codename}} main
++deb-src {{mirror}} {{codename}} main
+ 
+ ## Major bug fix updates produced after the final release of the
+ ## distribution.
+-deb {{security}} {{codename}}/updates main contrib non-free
+-deb-src {{security}} {{codename}}/updates main contrib non-free
+-deb {{mirror}} {{codename}}-updates main contrib non-free
+-deb-src {{mirror}} {{codename}}-updates main contrib non-free
++deb {{security}} {{codename}}/updates main
++deb-src {{security}} {{codename}}/updates main
++deb {{mirror}} {{codename}}-updates main
++deb-src {{mirror}} {{codename}}-updates main
+ 
+ ## Uncomment the following two lines to add software from the 'backports'
+ ## repository.
 @@ -26,7 +26,5 @@ deb-src {{mirror}} {{codename}}-updates main contrib non-free
  ## N.B. software from this repository may not have been tested as
  ## extensively as that contained in the main release, although it includes
