@@ -5,6 +5,13 @@ cloud-init (0.7.9-3) unstable; urgency=medium
 
  -- Thomas Goirand <zigo@debian.org>  Sat, 22 Jul 2017 16:20:48 +0200
 
+cloud-init (0.7.9-2.1) unstable; urgency=low
+
+  * Non-maintainer upload.
+  * Add patch from Joonas Kylmälä to fix FTBFS. (Closes: #865577)
+
+ -- Adrian Bunk <bunk@debian.org>  Thu, 20 Jul 2017 13:24:49 +0300
+
 cloud-init (0.7.9-2) unstable; urgency=medium
 
   * Add net-tools as runtime depends (Closes: #853926).
