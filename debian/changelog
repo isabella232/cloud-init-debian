@@ -2,6 +2,7 @@ cloud-init (0.7.9-3) unstable; urgency=medium
 
   * Fixed case for "OpenStack" in debian/cloud-init.templates (Closes: #841315)
   * Removed contrib and non-free by default (Closes: #865611).
+  * Remove upstart support.
 
  -- Thomas Goirand <zigo@debian.org>  Sat, 22 Jul 2017 16:20:48 +0200
 
