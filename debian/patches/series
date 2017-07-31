@@ -7,3 +7,4 @@
 0007-Skip-Cloudstack-tests-that-expect-network.patch
 0008-sysvinit-fs-dependencies.patch
 0009-Drop-all-unused-extended-version-handling.patch
+0010-PATCH-Fix-Python-code-style-errors-Closes-865577.patch
