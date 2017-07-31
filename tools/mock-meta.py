@@ -249,7 +249,10 @@ class MetaDataHandler(object):
                 try:
                     key_id = int(mybe_key)
                     key_name = key_ids[key_id]
-                except:
+                except ValueError:
+                    raise WebException(httplib.BAD_REQUEST,
+                                       "%s: not an integer" % mybe_key)
+                except KeyError:
                     raise WebException(httplib.BAD_REQUEST,
                                        "Unknown key id %r" % mybe_key)
                 # Extract the possible sub-params
