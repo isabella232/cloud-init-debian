@@ -1,6 +1,6 @@
-From 0e33b6f51e8f359e4cc299ac7f542262041112e4 Mon Sep 17 00:00:00 2001
-From: Thomas Goirand <zigo@debian.org>
-Date: Mon, 31 Jul 2017 21:20:18 +0200
+From 8afb8941e696b74ca03a7c80e15eed320e1b8e72 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Joonas=20Kylm=C3=A4l=C3=A4?= <joonas.kylmala@iki.fi>
+Date: Sun, 25 Jun 2017 07:42:13 +0200
 Subject: [PATCH] Fix Python code style errors (Closes #865577)
 
 This commit is based on Joshua Powers' upstream commit
