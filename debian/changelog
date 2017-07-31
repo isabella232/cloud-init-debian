@@ -4,6 +4,7 @@ cloud-init (0.7.9-3) unstable; urgency=medium
   * Removed contrib and non-free by default (Closes: #865611).
   * Remove upstart support.
   * Standards-Version is now 4.0.0.
+  * Overrides lintian cloud-init: init.d-script-depends-on-all-virtual-facility
 
  -- Thomas Goirand <zigo@debian.org>  Sat, 22 Jul 2017 16:20:48 +0200
 
