@@ -1,3 +1,10 @@
+cloud-init (0.7.9-4) unstable; urgency=high
+
+  * Add patch to avoid hardcoding /sbin for modprobe and udevadm.
+    (Closes: #852564)
+
+ -- Thomas Goirand <zigo@debian.org>  Mon, 25 Sep 2017 23:58:09 +0200
+
 cloud-init (0.7.9-3) unstable; urgency=medium
 
   * Fixed case for "OpenStack" in debian/cloud-init.templates (Closes: #841315)
