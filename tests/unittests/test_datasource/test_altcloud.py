@@ -282,9 +282,9 @@ class TestUserDataRhevm(TestCase):
         cloudinit.sources.DataSourceAltCloud.CLOUD_INFO_FILE = \
             '/etc/sysconfig/cloud-info'
         cloudinit.sources.DataSourceAltCloud.CMD_PROBE_FLOPPY = \
-            ['/sbin/modprobe', 'floppy']
+            ['modprobe', 'floppy']
         cloudinit.sources.DataSourceAltCloud.CMD_UDEVADM_SETTLE = \
-            ['/sbin/udevadm', 'settle', '--quiet', '--timeout=5']
+            ['udevadm', 'settle', '--quiet', '--timeout=5']
 
     def test_mount_cb_fails(self):
         '''Test user_data_rhevm() where mount_cb fails.'''
