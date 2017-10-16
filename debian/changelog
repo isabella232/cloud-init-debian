@@ -5,6 +5,8 @@ cloud-init (0.7.9-5) UNRELEASED; urgency=medium
   * Ran wrap-and-sort -bast.
   * Add runtime depends: cloud-guest-utils and locales (Closes: #878819).
   * Add eatmydata and sudo as recommends.
+  * Add 0012-Fix-message-when-a-local-is-missing.patch which is Debian specific
+    as Ubuntu handles locales differently (Closes: #804918).
 
  -- Thomas Goirand <zigo@debian.org>  Mon, 16 Oct 2017 20:04:32 +0000
 
