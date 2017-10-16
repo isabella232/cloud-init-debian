@@ -3,6 +3,7 @@ cloud-init (0.7.9-5) UNRELEASED; urgency=medium
   * Test with all Python versions.
   * Moved a bunch of build-depends to build-depends-indep.
   * Ran wrap-and-sort -bast.
+  * Add runtime depends: cloud-guest-utils and locales (Closes: #878819).
 
  -- Thomas Goirand <zigo@debian.org>  Mon, 16 Oct 2017 20:04:32 +0000
 

@@ -42,8 +42,10 @@ Homepage: https://launchpad.net/cloud-init
 Package: cloud-init
 Architecture: all
 Depends:
+ cloud-guest-utils,
  gdisk,
  ifupdown,
+ locales,
  lsb-base,
  lsb-release,
  net-tools,
