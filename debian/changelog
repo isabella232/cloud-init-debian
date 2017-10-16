@@ -7,6 +7,12 @@ cloud-init (0.7.9-5) UNRELEASED; urgency=medium
   * Add eatmydata and sudo as recommends.
   * Add 0012-Fix-message-when-a-local-is-missing.patch which is Debian specific
     as Ubuntu handles locales differently (Closes: #804918).
+  * Update / add new debconf template translations:
+    - fr.po (Closes: #819507).
+    - nl.po (Closes: #834612).
+    - de.po (Closes: #842490).
+    - pt_BR.po (Closes: #846526).
+    - it.po (Closes: #846929).
 
  -- Thomas Goirand <zigo@debian.org>  Mon, 16 Oct 2017 20:04:32 +0000
 

@@ -3,14 +3,14 @@
 #     2012 Hewlett-Packard Development Company, L.P., Cosmin Luta, Yahoo! Inc.,
 #     Gerard Dethier, 2013 Craig Tracey.
 # This file is distributed under the same license as the cloud-init package.
-# Copyright of this file  Chris Leick <c.leick@vollbio.de>, 2013 -2014.
+# Copyright of this file  Chris Leick <c.leick@vollbio.de>, 2013 -2016.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: cloud-init 0.7.6~bzr976-1\n"
+"Project-Id-Version: cloud-init 0.7.8-1\n"
 "Report-Msgid-Bugs-To: cloud-init@packages.debian.org\n"
 "POT-Creation-Date: 2016-09-24 15:26+0200\n"
-"PO-Revision-Date: 2014-06-25 21:12+0100\n"
+"PO-Revision-Date: 2016-10-27 18:09+0100\n"
 "Last-Translator: Chris Leick <c.leick@vollbio.de>\n"
 "Language-Team: German <debian-l10n-german@lists.debian.org>\n"
 "Language: de\n"
@@ -22,106 +22,88 @@ msgstr ""
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "/var/lib/cloud/seed only"
 msgid "NoCloud: Use /var/lib/cloud/seed"
-msgstr "nur /var/lib/cloud/seed"
+msgstr "NoCloud: verwenden Sie /var/lib/cloud/seed"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "OpenStack Config Drive"
 msgid "ConfigDrive: OpenStack config drive"
-msgstr "OpenStack-Konfigurationslaufwerk"
+msgstr "ConfigDrive: OpenStack-Konfigurationslaufwerk"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "OpenNebula: OpenNebula context disk"
-msgstr ""
+msgstr "OpenNebula: OpenNebula-Kontext-Platte"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "Azure: Microsoft Azure. Requires waagent package!"
-msgstr ""
+msgstr "Azure: Microsoft Azure. Erfordert das Paket Waagent!"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "AltCloud: RHEVm and vSphere config disks"
-msgstr ""
+msgstr "AltCloud: RHEVm- und vSphere-Konfigurationsplatten"
 
 # open virtualization format
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "OVF Transports"
 msgid "OVF: OVF transports"
-msgstr "OVF-Transporte"
+msgstr "OVF: OVF-Transporte"
 
 # metal as a service
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "Ubuntu MAAS"
 msgid "MAAS: Ubuntu MAAS"
-msgstr "Ubuntu-MAAS"
+msgstr "MAAS: Ubuntu-MAAS"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "CloudStack metadata service"
 msgid "GCE: Google Compute metadata service"
-msgstr "CloudStack-Metadatendienst"
+msgstr "GCE: Metadatendienst Google Compute"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "CloudStack metadata service"
 msgid "OpenStack: Native OpenStack metadata service"
-msgstr "CloudStack-Metadatendienst"
+msgstr "OpenStack: nativer OpenStack-Metadatendienst"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "CloudSigma: Metadata over serial for cloudsigma.com"
-msgstr ""
+msgstr "CloudSigma: Metadaten seriell für cloudsigma.com"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "CloudStack metadata service"
 msgid "SmartOS: SmartOS metadata service"
-msgstr "CloudStack-Metadatendienst"
+msgstr "SmartOS: SmartOS-Metadatendienst"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "EC2 Metadata service"
 msgid "Ec2: EC2 Metadata service"
-msgstr "EC2-Metadatendienst"
+msgstr "Ec2: EC2-Metadatendienst"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#, fuzzy
-#| msgid "CloudStack metadata service"
 msgid "CloudStack: CloudStack metadata service"
-msgstr "CloudStack-Metadatendienst"
+msgstr "CloudStack: CloudStack-Metadatendienst"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "None: Fallback"
-msgstr ""
+msgstr "Keins: Rückfalloption"
 
 #. Type: multiselect
 #. Description
@@ -148,14 +130,5 @@ msgid ""
 "timeout on boot."
 msgstr ""
 "Bitte beachten Sie, dass der »EC2-Metadatendienst« nur benutzt werden "
-"sollte, falls er vorhanden ist. Andernfalls wird dies eine spürbare "
+"sollte, falls er vorhanden ist. Andernfalls wird dies eine deutlich spürbare "
 "Zeitüberschreitung beim Systemstart auslösen."
-
-#~ msgid "AltCloud Config Drive"
-#~ msgstr "AltCloud-Konfigurationslaufwerk"
-
-#~ msgid "Google Cloud Engine"
-#~ msgstr "Google Cloud Engine"
-
-#~ msgid "Failsafe datasource"
-#~ msgstr "ausfallsichere Datenquelle"

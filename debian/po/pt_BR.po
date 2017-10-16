@@ -1,120 +1,111 @@
-# Italian translation of cloud-init debconf messages.
-# Copyright (C) 2016, cloud-init package copyright holder
+# Debconf translations for cloud-init.
+# Copyright (C) 2016 THE cloud-init'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the cloud-init package.
-# Beatrice Torracca <beatricet@libero.it>, 2013, 2016.
+# Adriano Rafael Gomes <adrianorg@debian.org>, 2016-2017.
+#
 msgid ""
 msgstr ""
 "Project-Id-Version: cloud-init\n"
 "Report-Msgid-Bugs-To: cloud-init@packages.debian.org\n"
 "POT-Creation-Date: 2016-09-24 15:26+0200\n"
-"PO-Revision-Date: 2016-10-01 14:29+0200\n"
-"Last-Translator: Beatrice Torracca <beatricet@libero.it>\n"
-"Language-Team: Italian <debian-l10n-italian@lists.debian.org>\n"
-"Language: it\n"
+"PO-Revision-Date: 2017-06-27 20:07-0300\n"
+"Last-Translator: Adriano Rafael Gomes <adrianorg@debian.org>\n"
+"Language-Team: Brazilian Portuguese <debian-l10n-portuguese@lists.debian."
+"org>\n"
+"Language: pt_BR\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Virtaal 0.7.1\n"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "/var/lib/cloud/seed only"
 msgid "NoCloud: Use /var/lib/cloud/seed"
-msgstr "NoCloud: usare /var/lib/cloud/seed"
+msgstr "NoCloud: Usar /var/lib/cloud/seed"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "OpenStack Config Drive"
 msgid "ConfigDrive: OpenStack config drive"
-msgstr "ConfigDrive: drive di configurazione OpenStack"
+msgstr "ConfigDrive: Drive de configuração do OpenStack"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "OpenNebula: OpenNebula context disk"
-msgstr "OpenNebula: disco di contesto OpenNebula"
+msgstr "OpenNebula: Disco de contexto do OpenNebula"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "Azure: Microsoft Azure. Requires waagent package!"
-msgstr "Azure: Microsoft Azure. Richiede il pacchetto waagent!"
+msgstr "Azure: Microsoft Azure. Requer o pacote waagent!"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "AltCloud: RHEVm and vSphere config disks"
-msgstr "AltCloud: dischi di configurazione RHEVm e vSphere"
+msgstr "AltCloud: Discos de configuração do RHEVm e vSphere"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "OVF Transports"
 msgid "OVF: OVF transports"
-msgstr "OVF: trasporti OVF"
+msgstr "OVF: Transportes OVF"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "Ubuntu MAAS"
 msgid "MAAS: Ubuntu MAAS"
 msgstr "MAAS: Ubuntu MAAS"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "CloudStack metadata service"
 msgid "GCE: Google Compute metadata service"
-msgstr "GCE: servizio di metadati Google Compute"
+msgstr "GCE: Serviço de metadados do Google Compute"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "CloudStack metadata service"
 msgid "OpenStack: Native OpenStack metadata service"
-msgstr "OpenStack: servizio di metadati nativo di OpenStack"
+msgstr "OpenStack: Serviço nativo de metadados do OpenStack"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "CloudSigma: Metadata over serial for cloudsigma.com"
-msgstr "CloudSigma: metadati via seriale per cloudsigma.com"
+msgstr "CloudSigma: Metadados sobre serial para cloudsigma.com"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "CloudStack metadata service"
 msgid "SmartOS: SmartOS metadata service"
-msgstr "SmartOS: servizio di metadati SmartOS"
+msgstr "SmartOS: Serviço de metadados do SmartOS"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "EC2 Metadata service"
 msgid "Ec2: EC2 Metadata service"
-msgstr "Ec2: servizio di metadati EC2"
+msgstr "Ec2: Serviço de metadados do EC2"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
-#| msgid "CloudStack metadata service"
 msgid "CloudStack: CloudStack metadata service"
-msgstr "CloudStack: servizio di metadati CloudStack"
+msgstr "CloudStack: Serviço de metadados do CloudStack"
 
 #. Type: multiselect
 #. Choices
 #: ../cloud-init.templates:1001
 msgid "None: Fallback"
-msgstr "None: ripiego"
+msgstr "None: Fallback (Nenhuma: último recurso)"
 
 #. Type: multiselect
 #. Description
 #: ../cloud-init.templates:1002
 msgid "Data sources to read from:"
-msgstr "Sorgenti di dati da cui leggere:"
+msgstr "Fontes de dados de onde ler:"
 
 #. Type: multiselect
 #. Description
@@ -123,8 +114,8 @@ msgid ""
 "Cloud-init supports searching different \"Data Sources\" for information "
 "that it uses to configure a cloud instance."
 msgstr ""
-"Cloud-init può cercare in diverse \"Sorgenti di dati\" le informazioni che "
-"usa per configurare un'istanza di nuvola."
+"O Cloud-init tem suporte a procurar em diferentes \"Fontes de Dados\" por "
+"informações que ele utiliza para configurar uma instância de nuvem."
 
 #. Type: multiselect
 #. Description
@@ -134,6 +125,6 @@ msgid ""
 "metadata service is present. Otherwise, it will trigger a very noticeable "
 "timeout on boot."
 msgstr ""
-"Notare che \"Servizio di metadati EC2\" dovrebbe essere usato solamente se è "
-"presente il servizio di metadati EC2, altrimenti causerà un tempo di attesa "
-"molto considerevole all'avvio."
+"Por favor, note que o \"serviço de metadados do EC2\" deverá ser usado "
+"somente se o mesmo estiver presente. Caso contrário, isso provocará um tempo "
+"de espera bastante significativo na inicialização."
