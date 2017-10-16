@@ -1,39 +1,39 @@
 Source: cloud-init
 Maintainer: Debian Cloud Team <debian-cloud@lists.debian.org>
 Uploaders:
-  Bastian Blank <waldi@debian.org>,
-  Charles Plessy <plessy@debian.org>,
-  Miguel Landaeta <nomadium@debian.org>,
-  Julien Danjou <acid@debian.org>,
-  Thomas Goirand <zigo@debian.org>
+ Bastian Blank <waldi@debian.org>,
+ Charles Plessy <plessy@debian.org>,
+ Miguel Landaeta <nomadium@debian.org>,
+ Julien Danjou <acid@debian.org>,
+ Thomas Goirand <zigo@debian.org>,
 Section: admin
 Priority: optional
 Build-Depends:
-  debhelper (>= 10),
-  dh-python,
-  dh-systemd,
-  iproute2,
-  pep8,
-  po-debconf,
-  pylint,
-  python3-all,
-  python3-setuptools,
+ debhelper (>= 10),
+ dh-python,
+ dh-systemd,
+ iproute2,
+ pep8,
+ po-debconf,
+ pylint,
+ python3-all,
+ python3-setuptools,
 Build-Depends-Indep:
-  python-pyflakes,
-  python3-configobj,
-  python3-httpretty,
-  python3-jinja2,
-  python3-jsonpatch,
-  python3-mock,
-  python3-nose,
-  python3-oauthlib,
-  python3-pep8,
-  python3-prettytable,
-  python3-requests,
-  python3-serial,
-  python3-six,
-  python3-unittest2,
-  python3-yaml
+ python-pyflakes,
+ python3-configobj,
+ python3-httpretty,
+ python3-jinja2,
+ python3-jsonpatch,
+ python3-mock,
+ python3-nose,
+ python3-oauthlib,
+ python3-pep8,
+ python3-prettytable,
+ python3-requests,
+ python3-serial,
+ python3-six,
+ python3-unittest2,
+ python3-yaml,
 Standards-Version: 4.0.0
 Vcs-Browser: https://anonscm.debian.org/git/cloud/cloud-init.git
 Vcs-Git: https://anonscm.debian.org/git/cloud/cloud-init.git
@@ -42,14 +42,14 @@ Homepage: https://launchpad.net/cloud-init
 Package: cloud-init
 Architecture: all
 Depends:
-  gdisk,
-  lsb-base,
-  lsb-release,
-  net-tools,
-  ifupdown,
-  procps,
-  ${misc:Depends},
-  ${python3:Depends}
+ gdisk,
+ ifupdown,
+ lsb-base,
+ lsb-release,
+ net-tools,
+ procps,
+ ${misc:Depends},
+ ${python3:Depends},
 Description: initialization system for infrastructure cloud instances
  Cloud-init provides a framework and tool to configure and customize virtual
  machine instances for Infrastructure-as-a-Service (IaaS) clouds platforms. It
