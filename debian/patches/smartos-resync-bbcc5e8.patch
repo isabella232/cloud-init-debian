@@ -1,0 +1,2446 @@
+commit 1aa8feba719b0f74fe9be240187fbc12c43c830a
+Author: Mike Gerdts <mike.gerdts@joyent.com>
+Date:   Fri Jun 8 20:27:58 2018 +0000
+
+    cloud-init-smartos-resync-bbcc5e8.patch
+
+diff --git a/cloudinit/serial.py b/cloudinit/serial.py
+new file mode 100644
+index 0000000..f9ef7ac
+--- /dev/null
++++ b/cloudinit/serial.py
+@@ -0,0 +1,39 @@
++# This file is part of cloud-init. See LICENSE file for license information.
++
++from __future__ import absolute_import
++
++try:
++    from serial import Serial
++except ImportError:
++    # For older versions of python (ie 2.6) pyserial may not exist and/or
++    # work and/or be installed, so make a dummy/fake serial that blows up
++    # when used...
++    class Serial(object):
++        def __init__(self, *args, **kwargs):
++            pass
++
++        @staticmethod
++        def isOpen():
++            return False
++
++        @staticmethod
++        def write(data):
++            raise IOError("Unable to perform serial `write` operation,"
++                          " pyserial not installed.")
++
++        @staticmethod
++        def readline():
++            raise IOError("Unable to perform serial `readline` operation,"
++                          " pyserial not installed.")
++
++        @staticmethod
++        def flush():
++            raise IOError("Unable to perform serial `flush` operation,"
++                          " pyserial not installed.")
++
++        @staticmethod
++        def read(size=1):
++            raise IOError("Unable to perform serial `read` operation,"
++                          " pyserial not installed.")
++
++# vi: ts=4 expandtab
+diff --git a/cloudinit/sources/DataSourceSmartOS.py b/cloudinit/sources/DataSourceSmartOS.py
+index 3e33411..d4de41a 100644
+--- a/cloudinit/sources/DataSourceSmartOS.py
++++ b/cloudinit/sources/DataSourceSmartOS.py
+@@ -1,53 +1,40 @@
+-# vi: ts=4 expandtab
+-#
+-#    Copyright (C) 2013 Canonical Ltd.
+-#
+-#    Author: Ben Howard <ben.howard@canonical.com>
+-#
+-#    This program is free software: you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License version 3, as
+-#    published by the Free Software Foundation.
+-#
+-#    This program is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
++# Copyright (C) 2013 Canonical Ltd.
++# Copyright (c) 2018, Joyent, Inc.
+ #
++# Author: Ben Howard <ben.howard@canonical.com>
+ #
++# This file is part of cloud-init. See LICENSE file for license information.
++
+ #    Datasource for provisioning on SmartOS. This works on Joyent
+ #        and public/private Clouds using SmartOS.
+ #
+ #    SmartOS hosts use a serial console (/dev/ttyS1) on KVM Linux Guests
+ #        The meta-data is transmitted via key/value pairs made by
+ #        requests on the console. For example, to get the hostname, you
+-#        would send "GET hostname" on /dev/ttyS1.
++#        would send "GET sdc:hostname" on /dev/ttyS1.
+ #        For Linux Guests running in LX-Brand Zones on SmartOS hosts
+ #        a socket (/native/.zonecontrol/metadata.sock) is used instead
+ #        of a serial console.
+ #
+ #   Certain behavior is defined by the DataDictionary
+-#       http://us-east.manta.joyent.com/jmc/public/mdata/datadict.html
++#       https://eng.joyent.com/mdata/datadict.html
+ #       Comments with "@datadictionary" are snippets of the definition
+ 
+ import base64
+ import binascii
+-import contextlib
++import errno
++import fcntl
++import json
+ import os
+ import random
+ import re
+ import socket
+-import stat
+-
+-import serial
+ 
+ from cloudinit import log as logging
++from cloudinit import serial
+ from cloudinit import sources
+ from cloudinit import util
+ 
+-
+ LOG = logging.getLogger(__name__)
+ 
+ SMARTOS_ATTRIB_MAP = {
+@@ -63,16 +50,42 @@ SMARTOS_ATTRIB_MAP = {
+     'availability_zone': ('sdc:datacenter_name', True),
+     'vendor-data': ('sdc:vendor-data', False),
+     'operator-script': ('sdc:operator-script', False),
++    'hostname': ('sdc:hostname', True),
++    'dns_domain': ('sdc:dns_domain', True),
++}
++
++SMARTOS_ATTRIB_JSON = {
++    # Cloud-init Key : (SmartOS Key known JSON)
++    'network-data': 'sdc:nics',
++    'dns_servers': 'sdc:resolvers',
++    'routes': 'sdc:routes',
+ }
+ 
++SMARTOS_ENV_LX_BRAND = "lx-brand"
++SMARTOS_ENV_KVM = "kvm"
++
+ DS_NAME = 'SmartOS'
+ DS_CFG_PATH = ['datasource', DS_NAME]
++NO_BASE64_DECODE = [
++    'iptables_disable',
++    'motd_sys_info',
++    'root_authorized_keys',
++    'sdc:datacenter_name',
++    'sdc:uuid'
++    'user-data',
++    'user-script',
++]
++
++METADATA_SOCKFILE = '/native/.zonecontrol/metadata.sock'
++SERIAL_DEVICE = '/dev/ttyS1'
++SERIAL_TIMEOUT = 60
++
+ # BUILT-IN DATASOURCE CONFIGURATION
+ #  The following is the built-in configuration. If the values
+ #  are not set via the system configuration, then these default
+ #  will be used:
+ #    serial_device: which serial device to use for the meta-data
+-#    seed_timeout: how long to wait on the device
++#    serial_timeout: how long to wait on the device
+ #    no_base64_decode: values which are not base64 encoded and
+ #            are fetched directly from SmartOS, not meta-data values
+ #    base64_keys: meta-data keys that are delivered in base64
+@@ -82,17 +95,10 @@ DS_CFG_PATH = ['datasource', DS_NAME]
+ #    fs_setup: describes how to format the ephemeral drive
+ #
+ BUILTIN_DS_CONFIG = {
+-    'serial_device': '/dev/ttyS1',
+-    'metadata_sockfile': '/native/.zonecontrol/metadata.sock',
+-    'seed_timeout': 60,
+-    'no_base64_decode': ['root_authorized_keys',
+-                         'motd_sys_info',
+-                         'iptables_disable',
+-                         'user-data',
+-                         'user-script',
+-                         'sdc:datacenter_name',
+-                         'sdc:uuid',
+-                        ],
++    'serial_device': SERIAL_DEVICE,
++    'serial_timeout': SERIAL_TIMEOUT,
++    'metadata_sockfile': METADATA_SOCKFILE,
++    'no_base64_decode': NO_BASE64_DECODE,
+     'base64_keys': [],
+     'base64_all': False,
+     'disk_aliases': {'ephemeral0': '/dev/vdb'},
+@@ -103,9 +109,9 @@ BUILTIN_CLOUD_CONFIG = {
+         'ephemeral0': {'table_type': 'mbr',
+                        'layout': False,
+                        'overwrite': False}
+-         },
++    },
+     'fs_setup': [{'label': 'ephemeral0',
+-                  'filesystem': 'ext3',
++                  'filesystem': 'ext4',
+                   'device': 'ephemeral0'}],
+ }
+ 
+@@ -156,59 +162,42 @@ LEGACY_USER_D = "/var/db"
+ 
+ 
+ class DataSourceSmartOS(sources.DataSource):
++
++    _unset = "_unset"
++    smartos_type = _unset
++    md_client = _unset
++
+     def __init__(self, sys_cfg, distro, paths):
+         sources.DataSource.__init__(self, sys_cfg, distro, paths)
+-        self.is_smartdc = None
+         self.ds_cfg = util.mergemanydict([
+             self.ds_cfg,
+             util.get_cfg_by_path(sys_cfg, DS_CFG_PATH, {}),
+             BUILTIN_DS_CONFIG])
+ 
+         self.metadata = {}
++        self.network_data = None
++        self._network_config = None
+ 
+-        # SDC LX-Brand Zones lack dmidecode (no /dev/mem) but
+-        # report 'BrandZ virtual linux' as the kernel version
+-        if os.uname()[3].lower() == 'brandz virtual linux':
+-            LOG.debug("Host is SmartOS, guest in Zone")
+-            self.is_smartdc = True
+-            self.smartos_type = 'lx-brand'
+-            self.cfg = {}
+-            self.seed = self.ds_cfg.get("metadata_sockfile")
+-        else:
+-            self.is_smartdc = True
+-            self.smartos_type = 'kvm'
+-            self.seed = self.ds_cfg.get("serial_device")
+-            self.cfg = BUILTIN_CLOUD_CONFIG
+-            self.seed_timeout = self.ds_cfg.get("serial_timeout")
+-        self.smartos_no_base64 = self.ds_cfg.get('no_base64_decode')
+-        self.b64_keys = self.ds_cfg.get('base64_keys')
+-        self.b64_all = self.ds_cfg.get('base64_all')
+         self.script_base_d = os.path.join(self.paths.get_cpath("scripts"))
+ 
++        self._init()
++
+     def __str__(self):
+         root = sources.DataSource.__str__(self)
+-        return "%s [seed=%s]" % (root, self.seed)
+-
+-    def _get_seed_file_object(self):
+-        if not self.seed:
+-            raise AttributeError("seed device is not set")
+-
+-        if self.smartos_type == 'lx-brand':
+-            if not stat.S_ISSOCK(os.stat(self.seed).st_mode):
+-                LOG.debug("Seed %s is not a socket", self.seed)
+-                return None
+-            sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+-            sock.connect(self.seed)
+-            return sock.makefile('rw')
+-        else:
+-            if not stat.S_ISCHR(os.stat(self.seed).st_mode):
+-                LOG.debug("Seed %s is not a character device")
+-                return None
+-            ser = serial.Serial(self.seed, timeout=self.seed_timeout)
+-            if not ser.isOpen():
+-                raise SystemError("Unable to open %s" % self.seed)
+-            return ser
+-        return None
++        return "%s [client=%s]" % (root, self.md_client)
++
++    def _init(self):
++        if self.smartos_type == self._unset:
++            self.smartos_type = get_smartos_environ()
++            if self.smartos_type is None:
++                self.md_client = None
++
++        if self.md_client == self._unset:
++            self.md_client = jmc_client_factory(
++                smartos_type=self.smartos_type,
++                metadata_sockfile=self.ds_cfg['metadata_sockfile'],
++                serial_device=self.ds_cfg['serial_device'],
++                serial_timeout=self.ds_cfg['serial_timeout'])
+ 
+     def _set_provisioned(self):
+         '''Mark the instance provisioning state as successful.
+@@ -227,50 +216,31 @@ class DataSourceSmartOS(sources.DataSource):
+                       '/'.join([svc_path, 'provision_success']))
+ 
+     def get_data(self):
++        self._init()
++
+         md = {}
+         ud = ""
+ 
+-        if not device_exists(self.seed):
+-            LOG.debug("No metadata device '%s' found for SmartOS datasource",
+-                      self.seed)
++        if not self.smartos_type:
++            LOG.debug("Not running on smartos")
+             return False
+ 
+-        uname_arch = os.uname()[4]
+-        if uname_arch.startswith("arm") or uname_arch == "aarch64":
+-            # Disabling because dmidcode in dmi_data() crashes kvm process
+-            LOG.debug("Disabling SmartOS datasource on arm (LP: #1243287)")
++        if not self.md_client.exists():
++            LOG.debug("No metadata device '%r' found for SmartOS datasource",
++                      self.md_client)
+             return False
+ 
+-        # SDC KVM instances will provide dmi data, LX-brand does not
+-        if self.smartos_type == 'kvm':
+-            dmi_info = dmi_data()
+-            if dmi_info is False:
+-                LOG.debug("No dmidata utility found")
+-                return False
+-
+-            system_type = dmi_info
+-            if 'smartdc' not in system_type.lower():
+-                LOG.debug("Host is not on SmartOS. system_type=%s",
+-                          system_type)
+-                return False
+-            LOG.debug("Host is SmartOS, guest in KVM")
+-
+-        seed_obj = self._get_seed_file_object()
+-        if seed_obj is None:
+-            LOG.debug('Seed file object not found.')
+-            return False
+-        with contextlib.closing(seed_obj) as seed:
+-            b64_keys = self.query('base64_keys', seed, strip=True, b64=False)
+-            if b64_keys is not None:
+-                self.b64_keys = [k.strip() for k in str(b64_keys).split(',')]
++        # Open once for many requests, rather than once for each request
++        self.md_client.open_transport()
+ 
+-            b64_all = self.query('base64_all', seed, strip=True, b64=False)
+-            if b64_all is not None:
+-                self.b64_all = util.is_true(b64_all)
++        for ci_noun, attribute in SMARTOS_ATTRIB_MAP.items():
++            smartos_noun, strip = attribute
++            md[ci_noun] = self.md_client.get(smartos_noun, strip=strip)
+ 
+-            for ci_noun, attribute in SMARTOS_ATTRIB_MAP.iteritems():
+-                smartos_noun, strip = attribute
+-                md[ci_noun] = self.query(smartos_noun, seed, strip=strip)
++        for ci_noun, smartos_noun in SMARTOS_ATTRIB_JSON.items():
++            md[ci_noun] = self.md_client.get_json(smartos_noun)
++
++        self.md_client.close_transport()
+ 
+         # @datadictionary: This key may contain a program that is written
+         # to a file in the filesystem of the guest on each boot and then
+@@ -302,8 +272,14 @@ class DataSourceSmartOS(sources.DataSource):
+         write_boot_content(u_data, u_data_f)
+ 
+         # Handle the cloud-init regular meta
++
++        # The hostname may or may not be qualified with the local domain name.
++        # This follows section 3.14 of RFC 2132.
+         if not md['local-hostname']:
+-            md['local-hostname'] = md['instance-id']
++            if md['hostname']:
++                md['local-hostname'] = md['hostname']
++            else:
++                md['local-hostname'] = md['instance-id']
+ 
+         ud = None
+         if md['user-data']:
+@@ -320,6 +296,8 @@ class DataSourceSmartOS(sources.DataSource):
+         self.metadata = util.mergemanydict([md, self.metadata])
+         self.userdata_raw = ud
+         self.vendordata_raw = md['vendor-data']
++        self.network_data = md['network-data']
++        self.routes_data = md['routes']
+ 
+         self._set_provisioned()
+         return True
+@@ -328,70 +306,31 @@ class DataSourceSmartOS(sources.DataSource):
+         return self.ds_cfg['disk_aliases'].get(name)
+ 
+     def get_config_obj(self):
+-        return self.cfg
++        if self.smartos_type == SMARTOS_ENV_KVM:
++            return BUILTIN_CLOUD_CONFIG
++        return {}
+ 
+     def get_instance_id(self):
+         return self.metadata['instance-id']
+ 
+-    def query(self, noun, seed_file, strip=False, default=None, b64=None):
+-        if b64 is None:
+-            if noun in self.smartos_no_base64:
+-                b64 = False
+-            elif self.b64_all or noun in self.b64_keys:
+-                b64 = True
+-
+-        return self._query_data(noun, seed_file, strip=strip,
+-                                default=default, b64=b64)
+-
+-    def _query_data(self, noun, seed_file, strip=False,
+-                    default=None, b64=None):
+-        """Makes a request via "GET <NOUN>"
+-
+-           In the response, the first line is the status, while subsequent
+-           lines are is the value. A blank line with a "." is used to
+-           indicate end of response.
+-
+-           If the response is expected to be base64 encoded, then set
+-           b64encoded to true. Unfortantely, there is no way to know if
+-           something is 100% encoded, so this method relies on being told
+-           if the data is base64 or not.
+-        """
+-
+-        if not noun:
+-            return False
+-
+-        response = JoyentMetadataClient(seed_file).get_metadata(noun)
+-
+-        if response is None:
+-            return default
+-
+-        if b64 is None:
+-            b64 = self._query_data('b64-%s' % noun, seed_file, b64=False,
+-                                   default=False, strip=True)
+-            b64 = util.is_true(b64)
++    @property
++    def network_config(self):
++        if self._network_config is None:
++            if self.network_data is not None:
++                self._network_config = (
++                    convert_smartos_network_data(
++                        network_data=self.network_data,
++                        dns_servers=self.metadata['dns_servers'],
++                        dns_domain=self.metadata['dns_domain'],
++                        routes=self.routes_data))
++        return self._network_config
+ 
+-        resp = None
+-        if b64 or strip:
+-            resp = "".join(response).rstrip()
+-        else:
+-            resp = "".join(response)
+-
+-        if b64:
+-            try:
+-                return base64.b64decode(resp)
+-            except TypeError:
+-                LOG.warn("Failed base64 decoding key '%s'", noun)
+-                return resp
+-
+-        return resp
+ 
+-
+-def device_exists(device):
+-    """Symplistic method to determine if the device exists or not"""
+-    return os.path.exists(device)
++class JoyentMetadataFetchException(Exception):
++    pass
+ 
+ 
+-class JoyentMetadataFetchException(Exception):
++class JoyentMetadataTimeoutException(JoyentMetadataFetchException):
+     pass
+ 
+ 
+@@ -407,8 +346,11 @@ class JoyentMetadataClient(object):
+         r' (?P<body>(?P<request_id>[0-9a-f]+) (?P<status>SUCCESS|NOTFOUND)'
+         r'( (?P<payload>.+))?)')
+ 
+-    def __init__(self, metasource):
+-        self.metasource = metasource
++    def __init__(self, smartos_type=None, fp=None):
++        if smartos_type is None:
++            smartos_type = get_smartos_environ()
++        self.smartos_type = smartos_type
++        self.fp = fp
+ 
+     def _checksum(self, body):
+         return '{0:08x}'.format(
+@@ -432,41 +374,312 @@ class JoyentMetadataClient(object):
+         if not frame_data.get('payload', None):
+             LOG.debug('No value found.')
+             return None
+-        value = base64.b64decode(frame_data['payload'])
++        value = util.b64d(frame_data['payload'])
+         LOG.debug('Value "%s" found.', value)
+         return value
+ 
+-    def get_metadata(self, metadata_key):
+-        LOG.debug('Fetching metadata key "%s"...', metadata_key)
++    def _readline(self):
++        """
++           Reads a line a byte at a time until \n is encountered.  Returns an
++           ascii string with the trailing newline removed.
++
++           If a timeout (per-byte) is set and it expires, a
++           JoyentMetadataFetchException will be thrown.
++        """
++        response = []
++
++        def as_ascii():
++            return b''.join(response).decode('ascii')
++
++        msg = "Partial response: '%s'"
++        while True:
++            try:
++                byte = self.fp.read(1)
++                if len(byte) == 0:
++                    raise JoyentMetadataTimeoutException(msg % as_ascii())
++                if byte == b'\n':
++                    return as_ascii()
++                response.append(byte)
++            except OSError as exc:
++                if exc.errno == errno.EAGAIN:
++                    raise JoyentMetadataTimeoutException(msg % as_ascii())
++                raise
++
++    def _write(self, msg):
++        self.fp.write(msg.encode('ascii'))
++        self.fp.flush()
++
++    def _negotiate(self):
++        LOG.debug('Negotiating protocol V2')
++        self._write('NEGOTIATE V2\n')
++        response = self._readline()
++        LOG.debug('read "%s"', response)
++        if response != 'V2_OK':
++            raise JoyentMetadataFetchException(
++                'Invalid response "%s" to "NEGOTIATE V2"' % response)
++        LOG.debug('Negotiation complete')
++
++    def request(self, rtype, param=None):
+         request_id = '{0:08x}'.format(random.randint(0, 0xffffffff))
+-        message_body = '{0} GET {1}'.format(request_id,
+-                                            base64.b64encode(metadata_key))
++        message_body = ' '.join((request_id, rtype,))
++        if param:
++            message_body += ' ' + base64.b64encode(param.encode()).decode()
+         msg = 'V2 {0} {1} {2}\n'.format(
+             len(message_body), self._checksum(message_body), message_body)
+         LOG.debug('Writing "%s" to metadata transport.', msg)
+-        self.metasource.write(msg.encode('ascii'))
+-        self.metasource.flush()
+ 
+-        response = self.metasource.read(1)
+-        while response[-1] !=  '\n':
+-            response = ''.join([response, self.metasource.read(1)])
+-        response = str(response).rstrip()
++        need_close = False
++        if not self.fp:
++            self.open_transport()
++            need_close = True
++
++        self._write(msg)
++        response = self._readline()
++        if need_close:
++            self.close_transport()
++
++        LOG.debug('Read "%s" from metadata transport.', response)
+ 
+         if 'SUCCESS' not in response:
+             return None
+ 
+-        response = response.decode('ascii')
+-        LOG.debug('Read "%s" from metadata transport.', response)
+-        return self._get_value_from_frame(request_id, response)
++        value = self._get_value_from_frame(request_id, response)
++        return value
++
++    def get(self, key, default=None, strip=False):
++        result = self.request(rtype='GET', param=key)
++        if result is None:
++            return default
++        if result and strip:
++            result = result.strip()
++        return result
++
++    def get_json(self, key, default=None):
++        result = self.get(key, default=default)
++        if result is None:
++            return default
++        return json.loads(result)
++
++    def list(self):
++        result = self.request(rtype='KEYS')
++        if not result:
++            return []
++        return result.split('\n')
++
++    def put(self, key, val):
++        param = b' '.join([base64.b64encode(i.encode())
++                           for i in (key, val)]).decode()
++        return self.request(rtype='PUT', param=param)
++
++    def delete(self, key):
++        return self.request(rtype='DELETE', param=key)
++
++    def close_transport(self):
++        if self.fp:
++            self.fp.close()
++            self.fp = None
++
++    def __enter__(self):
++        if self.fp:
++            return self
++        self.open_transport()
++        return self
++
++    def __exit__(self, exc_type, exc_value, traceback):
++        self.close_transport()
++        return
++
++    def open_transport(self):
++        raise NotImplementedError
++
++
++class JoyentMetadataSocketClient(JoyentMetadataClient):
++    def __init__(self, socketpath, smartos_type=SMARTOS_ENV_LX_BRAND):
++        super(JoyentMetadataSocketClient, self).__init__(smartos_type)
++        self.socketpath = socketpath
++
++    def open_transport(self):
++        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
++        sock.connect(self.socketpath)
++        self.fp = sock.makefile('rwb')
++        self._negotiate()
++
++    def exists(self):
++        return os.path.exists(self.socketpath)
++
++    def __repr__(self):
++        return "%s(socketpath=%s)" % (self.__class__.__name__, self.socketpath)
++
++
++class JoyentMetadataSerialClient(JoyentMetadataClient):
++    def __init__(self, device, timeout=10, smartos_type=SMARTOS_ENV_KVM,
++                 fp=None):
++        super(JoyentMetadataSerialClient, self).__init__(smartos_type, fp)
++        self.device = device
++        self.timeout = timeout
++
++    def exists(self):
++        return os.path.exists(self.device)
++
++    def open_transport(self):
++        if self.fp is None:
++            ser = serial.Serial(self.device, timeout=self.timeout)
++            if not ser.isOpen():
++                raise SystemError("Unable to open %s" % self.device)
++            self.fp = ser
++            fcntl.lockf(ser, fcntl.LOCK_EX)
++        self._flush()
++        self._negotiate()
++
++    def _flush(self):
++        LOG.debug('Flushing input')
++        # Read any pending data
++        timeout = self.fp.timeout
++        self.fp.timeout = 0.1
++        while True:
++            try:
++                self._readline()
++            except JoyentMetadataTimeoutException:
++                break
++        LOG.debug('Input empty')
++
++        # Send a newline and expect "invalid command".  Keep trying until
++        # successful.  Retry rather frequently so that the "Is the host
++        # metadata service running" appears on the console soon after someone
++        # attaches in an effort to debug.
++        if timeout > 5:
++            self.fp.timeout = 5
++        else:
++            self.fp.timeout = timeout
++        while True:
++            LOG.debug('Writing newline, expecting "invalid command"')
++            self._write('\n')
++            try:
++                response = self._readline()
++                if response == 'invalid command':
++                    break
++                if response == 'FAILURE':
++                    LOG.debug('Got "FAILURE".  Retrying.')
++                    continue
++                LOG.warning('Unexpected response "%s" during flush', response)
++            except JoyentMetadataTimeoutException:
++                LOG.warning('Timeout while initializing metadata client. ' +
++                            'Is the host metadata service running?')
++        LOG.debug('Got "invalid command".  Flush complete.')
++        self.fp.timeout = timeout
++
++    def __repr__(self):
++        return "%s(device=%s, timeout=%s)" % (
++            self.__class__.__name__, self.device, self.timeout)
++
++
++class JoyentMetadataLegacySerialClient(JoyentMetadataSerialClient):
++    """V1 of the protocol was not safe for all values.
++    Thus, we allowed the user to pass values in as base64 encoded.
++    Users may still reasonably expect to be able to send base64 data
++    and have it transparently decoded.  So even though the V2 format is
++    now used, and is safe (using base64 itself), we keep legacy support.
++
++    The way for a user to do this was:
++      a.) specify 'base64_keys' key whose value is a comma delimited
++          list of keys that were base64 encoded.
++      b.) base64_all: string interpreted as a boolean that indicates
++          if all keys are base64 encoded.
++      c.) set a key named b64-<keyname> with a boolean indicating that
++          <keyname> is base64 encoded."""
++
++    def __init__(self, device, timeout=10, smartos_type=None):
++        s = super(JoyentMetadataLegacySerialClient, self)
++        s.__init__(device, timeout, smartos_type)
++        self.base64_keys = None
++        self.base64_all = None
++
++    def _init_base64_keys(self, reset=False):
++        if reset:
++            self.base64_keys = None
++            self.base64_all = None
++
++        keys = None
++        if self.base64_all is None:
++            keys = self.list()
++            if 'base64_all' in keys:
++                self.base64_all = util.is_true(self._get("base64_all"))
++            else:
++                self.base64_all = False
++
++        if self.base64_all:
++            # short circuit if base64_all is true
++            return
++
++        if self.base64_keys is None:
++            if keys is None:
++                keys = self.list()
++            b64_keys = set()
++            if 'base64_keys' in keys:
++                b64_keys = set(self._get("base64_keys").split(","))
++
++            # now add any b64-<keyname> that has a true value
++            for key in [k[3:] for k in keys if k.startswith("b64-")]:
++                if util.is_true(self._get(key)):
++                    b64_keys.add(key)
++                else:
++                    if key in b64_keys:
++                        b64_keys.remove(key)
++
++            self.base64_keys = b64_keys
++
++    def _get(self, key, default=None, strip=False):
++        return (super(JoyentMetadataLegacySerialClient, self).
++                get(key, default=default, strip=strip))
++
++    def is_b64_encoded(self, key, reset=False):
++        if key in NO_BASE64_DECODE:
++            return False
++
++        self._init_base64_keys(reset=reset)
++        if self.base64_all:
++            return True
++
++        return key in self.base64_keys
+ 
++    def get(self, key, default=None, strip=False):
++        mdefault = object()
++        val = self._get(key, strip=False, default=mdefault)
++        if val is mdefault:
++            return default
++
++        if self.is_b64_encoded(key):
++            try:
++                val = base64.b64decode(val.encode()).decode()
++            # Bogus input produces different errors in Python 2 and 3
++            except (TypeError, binascii.Error):
++                LOG.warning("Failed base64 decoding key '%s': %s", key, val)
+ 
+-def dmi_data():
+-    sys_type = util.read_dmi_data("system-product-name")
++        if strip:
++            val = val.strip()
+ 
+-    if not sys_type:
++        return val
++
++
++def jmc_client_factory(
++        smartos_type=None, metadata_sockfile=METADATA_SOCKFILE,
++        serial_device=SERIAL_DEVICE, serial_timeout=SERIAL_TIMEOUT,
++        uname_version=None):
++
++    if smartos_type is None:
++        smartos_type = get_smartos_environ(uname_version)
++
++    if smartos_type is None:
+         return None
++    elif smartos_type == SMARTOS_ENV_KVM:
++        return JoyentMetadataLegacySerialClient(
++            device=serial_device, timeout=serial_timeout,
++            smartos_type=smartos_type)
++    elif smartos_type == SMARTOS_ENV_LX_BRAND:
++        return JoyentMetadataSocketClient(socketpath=metadata_sockfile,
++                                          smartos_type=smartos_type)
+ 
+-    return sys_type
++    raise ValueError("Unknown value for smartos_type: %s" % smartos_type)
+ 
+ 
+ def write_boot_content(content, content_f, link=None, shebang=False,
+@@ -522,15 +735,236 @@ def write_boot_content(content, content_f, link=None, shebang=False,
+                 util.ensure_dir(os.path.dirname(link))
+                 os.symlink(content_f, link)
+         except IOError as e:
+-            util.logexc(LOG, "failed establishing content link", e)
++            util.logexc(LOG, "failed establishing content link: %s", e)
++
++
++def get_smartos_environ(uname_version=None, product_name=None,
++                        uname_arch=None):
++    uname = os.uname()
++    if uname_arch is None:
++        uname_arch = uname[4]
++
++    if uname_arch.startswith("arm") or uname_arch == "aarch64":
++        return None
++
++    # SDC LX-Brand Zones lack dmidecode (no /dev/mem) but
++    # report 'BrandZ virtual linux' as the kernel version
++    if uname_version is None:
++        uname_version = uname[3]
++    if uname_version == 'BrandZ virtual linux':
++        return SMARTOS_ENV_LX_BRAND
++
++    if product_name is None:
++        system_type = util.read_dmi_data("system-product-name")
++    else:
++        system_type = product_name
++
++    if system_type and system_type.startswith('SmartDC'):
++        return SMARTOS_ENV_KVM
++
++    return None
++
++
++# Convert SMARTOS 'sdc:nics' data to network_config yaml
++def convert_smartos_network_data(network_data=None,
++                                 dns_servers=None, dns_domain=None,
++                                 routes=None):
++    """Return a dictionary of network_config by parsing provided
++       SMARTOS sdc:nics configuration data
++
++    sdc:nics data is a dictionary of properties of a nic and the ip
++    configuration desired.  Additional nic dictionaries are appended
++    to the list.
++
++    Converting the format is straightforward though it does include
++    duplicate information as well as data which appears to be relevant
++    to the hostOS rather than the guest.
++
++    For each entry in the nics list returned from query sdc:nics, we
++    create a type: physical entry, and extract the interface properties:
++    'mac' -> 'mac_address', 'mtu', 'interface' -> 'name'.  The remaining
++    keys are related to ip configuration.  For each ip in the 'ips' list
++    we create a subnet entry under 'subnets' pairing the ip to a one in
++    the 'gateways' list.
++
++    Each route in sdc:routes is mapped to a route on each interface.
++    The sdc:routes properties 'dst' and 'gateway' map to 'network' and
++    'gateway'.  The 'linklocal' sdc:routes property is ignored.
++    """
++
++    valid_keys = {
++        'physical': [
++            'mac_address',
++            'mtu',
++            'name',
++            'params',
++            'subnets',
++            'type',
++        ],
++        'subnet': [
++            'address',
++            'broadcast',
++            'dns_nameservers',
++            'dns_search',
++            'metric',
++            'pointopoint',
++            'routes',
++            'scope',
++            'type',
++        ],
++        'route': [
++            'network',
++            'gateway',
++        ],
++    }
++
++    if dns_servers:
++        if not isinstance(dns_servers, (list, tuple)):
++            dns_servers = [dns_servers]
++    else:
++        dns_servers = []
++
++    if dns_domain:
++        if not isinstance(dns_domain, (list, tuple)):
++            dns_domain = [dns_domain]
++    else:
++        dns_domain = []
++
++    if not routes:
++        routes = []
++
++    def is_valid_ipv4(addr):
++        return '.' in addr
++
++    def is_valid_ipv6(addr):
++        return ':' in addr
++
++    pgws = {
++        'ipv4': {'match': is_valid_ipv4, 'gw': None},
++        'ipv6': {'match': is_valid_ipv6, 'gw': None},
++    }
++
++    config = []
++    for nic in network_data:
++        cfg = dict((k, v) for k, v in nic.items()
++                   if k in valid_keys['physical'])
++        cfg.update({
++            'type': 'physical',
++            'name': nic['interface']})
++        if 'mac' in nic:
++            cfg.update({'mac_address': nic['mac']})
++
++        subnets = []
++        for ip in nic.get('ips', []):
++            if ip == "dhcp":
++                subnet = {'type': 'dhcp4'}
++            else:
++                routeents = []
++                subnet = dict((k, v) for k, v in nic.items()
++                              if k in valid_keys['subnet'])
++                subnet.update({
++                    'type': 'static',
++                    'address': ip,
++                })
++
++                proto = 'ipv4' if is_valid_ipv4(ip) else 'ipv6'
++                # Only use gateways for 'primary' nics
++                if 'primary' in nic and nic.get('primary', False):
++                    # the ips and gateways list may be N to M, here
++                    # we map the ip index into the gateways list,
++                    # and handle the case that we could have more ips
++                    # than gateways.  we only consume the first gateway
++                    if not pgws[proto]['gw']:
++                        gateways = [gw for gw in nic.get('gateways', [])
++                                    if pgws[proto]['match'](gw)]
++                        if len(gateways):
++                            pgws[proto]['gw'] = gateways[0]
++                            subnet.update({'gateway': pgws[proto]['gw']})
++
++                for route in routes:
++                    rcfg = dict((k, v) for k, v in route.items()
++                                if k in valid_keys['route'])
++                    # Linux uses the value of 'gateway' to determine
++                    # automatically if the route is a forward/next-hop
++                    # (non-local IP for gateway) or an interface/resolver
++                    # (local IP for gateway).  So we can ignore the
++                    # 'interface' attribute of sdc:routes, because SDC
++                    # guarantees that the gateway is a local IP for
++                    # "interface=true".
++                    #
++                    # Eventually we should be smart and compare "gateway"
++                    # to see if it's in the prefix.  We can then smartly
++                    # add or not-add this route.  But for now,
++                    # when in doubt, use brute force! Routes for everyone!
++                    rcfg.update({'network': route['dst']})
++                    routeents.append(rcfg)
++                    subnet.update({'routes': routeents})
++
++            subnets.append(subnet)
++        cfg.update({'subnets': subnets})
++        config.append(cfg)
++
++    if dns_servers:
++        config.append(
++            {'type': 'nameserver', 'address': dns_servers,
++             'search': dns_domain})
++
++    return {'version': 1, 'config': config}
+ 
+ 
+ # Used to match classes to dependencies
+ datasources = [
+-    (DataSourceSmartOS, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
++    (DataSourceSmartOS, (sources.DEP_FILESYSTEM, )),
+ ]
+ 
+ 
+ # Return a list of data sources that match this set of dependencies
+ def get_datasource_list(depends):
+     return sources.list_from_depends(depends, datasources)
++
++
++if __name__ == "__main__":
++    import sys
++    jmc = jmc_client_factory()
++    if jmc is None:
++        print("Do not appear to be on smartos.")
++        sys.exit(1)
++    if len(sys.argv) == 1:
++        keys = (list(SMARTOS_ATTRIB_JSON.keys()) +
++                list(SMARTOS_ATTRIB_MAP.keys()) + ['network_config'])
++    else:
++        keys = sys.argv[1:]
++
++    def load_key(client, key, data):
++        if key in data:
++            return data[key]
++
++        if key in SMARTOS_ATTRIB_JSON:
++            keyname = SMARTOS_ATTRIB_JSON[key]
++            data[key] = client.get_json(keyname)
++        elif key == "network_config":
++            for depkey in ('network-data', 'dns_servers', 'dns_domain',
++                           'routes'):
++                load_key(client, depkey, data)
++            data[key] = convert_smartos_network_data(
++                network_data=data['network-data'],
++                dns_servers=data['dns_servers'],
++                dns_domain=data['dns_domain'],
++                routes=data['routes'])
++        else:
++            if key in SMARTOS_ATTRIB_MAP:
++                keyname, strip = SMARTOS_ATTRIB_MAP[key]
++            else:
++                keyname, strip = (key, False)
++            data[key] = client.get(keyname, strip=strip)
++
++        return data[key]
++
++    data = {}
++    for key in keys:
++        load_key(client=jmc, key=key, data=data)
++
++    print(json.dumps(data, indent=1, sort_keys=True,
++                     separators=(',', ': ')))
++
++# vi: ts=4 expandtab
+diff --git a/cloudinit/util.py b/cloudinit/util.py
+index 2da58c8..1f1fba2 100644
+--- a/cloudinit/util.py
++++ b/cloudinit/util.py
+@@ -49,6 +49,8 @@ import tempfile
+ import time
+ import urlparse
+ 
++from base64 import b64decode, b64encode
++
+ import yaml
+ 
+ from cloudinit import importer
+@@ -74,6 +76,24 @@ FN_ALLOWED = ('_-.()' + string.digits + string.ascii_letters)
+ # Helper utils to see if running in a container
+ CONTAINER_TESTS = ['running-in-container', 'lxc-is-container']
+ 
++def b64d(source):
++    # Base64 decode some data, accepting bytes or unicode/str, and returning
++    # str/unicode if the result is utf-8 compatible, otherwise returning bytes.
++    decoded = b64decode(source)
++    try:
++        return decoded.decode('utf-8')
++    except UnicodeDecodeError:
++        return decoded
++
++
++def b64e(source):
++    # Base64 encode some data, accepting bytes or unicode/str, and returning
++    # str/unicode if the result is utf-8 compatible, otherwise returning bytes.
++    if not isinstance(source, bytes):
++        source = source.encode('utf-8')
++    return b64encode(source).decode('utf-8')
++
++
+ # Path for DMI Data
+ DMI_SYS_PATH = "/sys/class/dmi/id"
+ 
+diff --git a/doc/examples/cloud-config-disk-setup.txt b/doc/examples/cloud-config-disk-setup.txt
+index 0dfef8e..43a62a2 100644
+--- a/doc/examples/cloud-config-disk-setup.txt
++++ b/doc/examples/cloud-config-disk-setup.txt
+@@ -7,7 +7,7 @@
+ 
+ disk_setup:
+    ephmeral0:
+-       type: 'mbr'
++       table_type: 'mbr'
+        layout: True
+        overwrite: False
+ 
+@@ -23,7 +23,7 @@ fs_setup:
+ device_aliases: {'ephemeral0': '/dev/sdb'}
+ disk_setup:
+     ephemeral0:
+-         type: mbr
++         table_type: mbr
+          layout: True
+          overwrite: False
+ 
+@@ -37,16 +37,16 @@ fs_setup:
+ # Default disk definitions for SmartOS
+ # ------------------------------------
+ 
+-device_aliases: {'ephemeral0': '/dev/sdb'}
++device_aliases: {'ephemeral0': '/dev/vdb'}
+ disk_setup:
+     ephemeral0:
+-         type: mbr
++         table_type: mbr
+          layout: False
+          overwrite: False
+ 
+ fs_setup:
+     - label: ephemeral0
+-      filesystem: ext3
++      filesystem: ext4
+       device: ephemeral0.0
+ 
+ # Cavaut for SmartOS: if ephemeral disk is not defined, then the disk will
+@@ -63,10 +63,10 @@ fs_setup:
+ 
+ disk_setup:
+    ephmeral0:
+-       type: 'mbr'
++       table_type: 'mbr'
+        layout: 'auto'
+    /dev/xvdh:
+-       type: 'mbr'
++       table_type: 'mbr'
+        layout:
+            - 33
+            - [33, 82]
+@@ -79,7 +79,7 @@ disk_setup:
+ # The general format is:
+ #    disk_setup:
+ #        <DEVICE>:
+-#            type: 'mbr'
++#            table_type: 'mbr'
+ #            layout: <LAYOUT|BOOL>
+ #            overwrite: <BOOL>
+ #
+@@ -96,13 +96,13 @@ disk_setup:
+ #                Note: At this time, there is no handling or setup of
+ #                device mapper targets.
+ #
+-#    type=<TYPE>: Currently the following are supported:
++#    table_type=<TYPE>: Currently the following are supported:
+ #                    'mbr': default and setups a MS-DOS partition table
++#                    'gpt': setups a GPT partition table
+ #
+-#                Note: At this time only 'mbr' partition tables are allowed.
+-#                    It is anticipated in the future that we'll have GPT as
+-#                    option in the future, or even "RAID" to create a mdadm
+-#                    RAID.
++#                Note: At this time only 'mbr' and 'gpt' partition tables
++#                    are allowed. It is anticipated in the future that
++#                    we'll also have "RAID" to create a mdadm RAID.
+ #
+ #    layout={...}: The device layout. This is a list of values, with the
+ #                percentage of disk that partition will take.
+@@ -116,7 +116,7 @@ disk_setup:
+ #                partition having a swap label, taking 1/3 of the disk space
+ #                and the remainder being used as the second partition.
+ #                    /dev/xvdh':
+-#                        type: 'mbr'
++#                        table_type: 'mbr'
+ #                        layout:
+ #                            - [33,82]
+ #                            - 66
+@@ -155,11 +155,11 @@ fs_setup:
+      filesystem: 'ext3'
+      device: 'ephemeral0'
+      partition: 'auto'
+-   - label:  mylabl2
++   - label: mylabl2
+      filesystem: 'ext4'
+      device: '/dev/xvda1'
+-   - special:
+-     cmd: mkfs -t %(FILESYSTEM)s -L %(LABEL)s %(DEVICE)s
++   - cmd: mkfs -t %(filesystem)s -L %(label)s %(device)s
++     label: mylabl3
+      filesystem: 'btrfs'
+      device: '/dev/xvdh'
+ 
+diff --git a/tests/unittests/test_datasource/test_smartos.py b/tests/unittests/test_datasource/test_smartos.py
+index d13c27e..1f2b4b1 100644
+--- a/tests/unittests/test_datasource/test_smartos.py
++++ b/tests/unittests/test_datasource/test_smartos.py
+@@ -1,42 +1,311 @@
+-# vi: ts=4 expandtab
++# Copyright (C) 2013 Canonical Ltd.
++# Copyright (c) 2018, Joyent, Inc.
+ #
+-#    Copyright (C) 2013 Canonical Ltd.
+-#
+-#    Author: Ben Howard <ben.howard@canonical.com>
+-#
+-#    This program is free software: you can redistribute it and/or modify
+-#    it under the terms of the GNU General Public License version 3, as
+-#    published by the Free Software Foundation.
+-#
+-#    This program is distributed in the hope that it will be useful,
+-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-#    GNU General Public License for more details.
+-#
+-#    You should have received a copy of the GNU General Public License
+-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-#
+-#
+-#   This is a testcase for the SmartOS datasource. It replicates a serial
+-#   console and acts like the SmartOS console does in order to validate
+-#   return responses.
++# Author: Ben Howard <ben.howard@canonical.com>
+ #
++# This file is part of cloud-init. See LICENSE file for license information.
+ 
+-import base64
+-from cloudinit import helpers as c_helpers
+-from cloudinit.sources import DataSourceSmartOS
+-from tests.unittests import helpers
++'''This is a testcase for the SmartOS datasource.
++
++It replicates a serial console and acts like the SmartOS console does in
++order to validate return responses.
++
++'''
++
++from __future__ import print_function
++
++from binascii import crc32
++import json
++import mock
++import multiprocessing
+ import os
+ import os.path
+ import re
++import shutil
++import signal
+ import stat
++import tempfile
++import unittest2
+ import uuid
+ 
++from base64 import (b64decode, b64encode)
++from cloudinit import serial
++from cloudinit.sources import DataSourceSmartOS
++from cloudinit.sources.DataSourceSmartOS import (
++    convert_smartos_network_data as convert_net,
++    SMARTOS_ENV_KVM, SERIAL_DEVICE, get_smartos_environ)
++
++import six
++
++from cloudinit import helpers as c_helpers
++from cloudinit.util import (b64e, subp)
++
++from ..helpers import FilesystemMockingTestCase, TestCase
++
++SDC_NICS = json.loads("""
++[
++    {
++        "nic_tag": "external",
++        "primary": true,
++        "mtu": 1500,
++        "model": "virtio",
++        "gateway": "8.12.42.1",
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.102",
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "gateways": [
++            "8.12.42.1"
++        ],
++        "vlan_id": 324,
++        "mac": "90:b8:d0:f5:e4:f5",
++        "interface": "net0",
++        "ips": [
++            "8.12.42.102/24"
++        ]
++    },
++    {
++        "nic_tag": "sdc_overlay/16187209",
++        "gateway": "192.168.128.1",
++        "model": "virtio",
++        "mac": "90:b8:d0:a5:ff:cd",
++        "netmask": "255.255.252.0",
++        "ip": "192.168.128.93",
++        "network_uuid": "4cad71da-09bc-452b-986d-03562a03a0a9",
++        "gateways": [
++            "192.168.128.1"
++        ],
++        "vlan_id": 2,
++        "mtu": 8500,
++        "interface": "net1",
++        "ips": [
++            "192.168.128.93/22"
++        ]
++    }
++]
++""")
++
++
++SDC_NICS_ALT = json.loads("""
++[
++    {
++        "interface": "net0",
++        "mac": "90:b8:d0:ae:64:51",
++        "vlan_id": 324,
++        "nic_tag": "external",
++        "gateway": "8.12.42.1",
++        "gateways": [
++          "8.12.42.1"
++        ],
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.51",
++        "ips": [
++          "8.12.42.51/24"
++        ],
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "model": "virtio",
++        "mtu": 1500,
++        "primary": true
++    },
++    {
++        "interface": "net1",
++        "mac": "90:b8:d0:bd:4f:9c",
++        "vlan_id": 600,
++        "nic_tag": "internal",
++        "netmask": "255.255.255.0",
++        "ip": "10.210.1.217",
++        "ips": [
++          "10.210.1.217/24"
++        ],
++        "network_uuid": "98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++        "model": "virtio",
++        "mtu": 1500
++    }
++]
++""")
++
++SDC_NICS_DHCP = json.loads("""
++[
++    {
++        "interface": "net0",
++        "mac": "90:b8:d0:ae:64:51",
++        "vlan_id": 324,
++        "nic_tag": "external",
++        "gateway": "8.12.42.1",
++        "gateways": [
++          "8.12.42.1"
++        ],
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.51",
++        "ips": [
++          "8.12.42.51/24"
++        ],
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "model": "virtio",
++        "mtu": 1500,
++        "primary": true
++    },
++    {
++        "interface": "net1",
++        "mac": "90:b8:d0:bd:4f:9c",
++        "vlan_id": 600,
++        "nic_tag": "internal",
++        "netmask": "255.255.255.0",
++        "ip": "10.210.1.217",
++        "ips": [
++          "dhcp"
++        ],
++        "network_uuid": "98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++        "model": "virtio",
++        "mtu": 1500
++    }
++]
++""")
++
++SDC_NICS_MIP = json.loads("""
++[
++    {
++        "interface": "net0",
++        "mac": "90:b8:d0:ae:64:51",
++        "vlan_id": 324,
++        "nic_tag": "external",
++        "gateway": "8.12.42.1",
++        "gateways": [
++          "8.12.42.1"
++        ],
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.51",
++        "ips": [
++          "8.12.42.51/24",
++          "8.12.42.52/24"
++        ],
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "model": "virtio",
++        "mtu": 1500,
++        "primary": true
++    },
++    {
++        "interface": "net1",
++        "mac": "90:b8:d0:bd:4f:9c",
++        "vlan_id": 600,
++        "nic_tag": "internal",
++        "netmask": "255.255.255.0",
++        "ip": "10.210.1.217",
++        "ips": [
++          "10.210.1.217/24",
++          "10.210.1.151/24"
++        ],
++        "network_uuid": "98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++        "model": "virtio",
++        "mtu": 1500
++    }
++]
++""")
++
++SDC_NICS_MIP_IPV6 = json.loads("""
++[
++    {
++        "interface": "net0",
++        "mac": "90:b8:d0:ae:64:51",
++        "vlan_id": 324,
++        "nic_tag": "external",
++        "gateway": "8.12.42.1",
++        "gateways": [
++          "8.12.42.1"
++        ],
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.51",
++        "ips": [
++          "2001:4800:78ff:1b:be76:4eff:fe06:96b3/64",
++          "8.12.42.51/24"
++        ],
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "model": "virtio",
++        "mtu": 1500,
++        "primary": true
++    },
++    {
++        "interface": "net1",
++        "mac": "90:b8:d0:bd:4f:9c",
++        "vlan_id": 600,
++        "nic_tag": "internal",
++        "netmask": "255.255.255.0",
++        "ip": "10.210.1.217",
++        "ips": [
++          "10.210.1.217/24"
++        ],
++        "network_uuid": "98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++        "model": "virtio",
++        "mtu": 1500
++    }
++]
++""")
++
++SDC_NICS_IPV4_IPV6 = json.loads("""
++[
++    {
++        "interface": "net0",
++        "mac": "90:b8:d0:ae:64:51",
++        "vlan_id": 324,
++        "nic_tag": "external",
++        "gateway": "8.12.42.1",
++        "gateways": ["8.12.42.1", "2001::1", "2001::2"],
++        "netmask": "255.255.255.0",
++        "ip": "8.12.42.51",
++        "ips": ["2001::10/64", "8.12.42.51/24", "2001::11/64",
++                "8.12.42.52/32"],
++        "network_uuid": "992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++        "model": "virtio",
++        "mtu": 1500,
++        "primary": true
++    },
++    {
++        "interface": "net1",
++        "mac": "90:b8:d0:bd:4f:9c",
++        "vlan_id": 600,
++        "nic_tag": "internal",
++        "netmask": "255.255.255.0",
++        "ip": "10.210.1.217",
++        "ips": ["10.210.1.217/24"],
++        "gateways": ["10.210.1.210"],
++        "network_uuid": "98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++        "model": "virtio",
++        "mtu": 1500
++    }
++]
++""")
++
++SDC_NICS_SINGLE_GATEWAY = json.loads("""
++[
++  {
++    "interface":"net0",
++    "mac":"90:b8:d0:d8:82:b4",
++    "vlan_id":324,
++    "nic_tag":"external",
++    "gateway":"8.12.42.1",
++    "gateways":["8.12.42.1"],
++    "netmask":"255.255.255.0",
++    "ip":"8.12.42.26",
++    "ips":["8.12.42.26/24"],
++    "network_uuid":"992fc7ce-6aac-4b74-aed6-7b9d2c6c0bfe",
++    "model":"virtio",
++    "mtu":1500,
++    "primary":true
++  },
++  {
++    "interface":"net1",
++    "mac":"90:b8:d0:0a:51:31",
++    "vlan_id":600,
++    "nic_tag":"internal",
++    "netmask":"255.255.255.0",
++    "ip":"10.210.1.27",
++    "ips":["10.210.1.27/24"],
++    "network_uuid":"98657fdf-11f4-4ee2-88a4-ce7fe73e33a6",
++    "model":"virtio",
++    "mtu":1500
++  }
++]
++""")
+ 
+-try:
+-    from unittest import mock
+-except ImportError:
+-    import mock
+ 
+ MOCK_RETURNS = {
+     'hostname': 'test-host',
+@@ -51,126 +320,84 @@ MOCK_RETURNS = {
+     'sdc:vendor-data': '\n'.join(['VENDOR_DATA', '']),
+     'user-data': '\n'.join(['something', '']),
+     'user-script': '\n'.join(['/bin/true', '']),
++    'sdc:nics': json.dumps(SDC_NICS),
+ }
+ 
+ DMI_DATA_RETURN = 'smartdc'
+ 
+-
+-class MockMetaFile(object):
+-    """Fake a metadata file object for testing the code that
+-        reads/writes the metadata source"""
+-
+-    port = None
+-
+-    def __init__(self, mockdata):
+-        self.last = None
+-        self.last = None
+-        self.new = True
+-        self.count = 0
+-        self.mocked_out = []
+-        self.mockdata = mockdata
+-
+-    def open(self):
++# Useful for calculating the length of a frame body.  A SUCCESS body will be
++# followed by more characters or be one character less if SUCCESS with no
++# payload.  See Section 4.3 of https://eng.joyent.com/mdata/protocol.html.
++SUCCESS_LEN = len('0123abcd SUCCESS ')
++NOTFOUND_LEN = len('0123abcd NOTFOUND')
++
++
++class PsuedoJoyentClient(object):
++    def __init__(self, data=None):
++        if data is None:
++            data = MOCK_RETURNS.copy()
++        self.data = data
++        self._is_open = False
++        return
++
++    def get(self, key, default=None, strip=False):
++        if key in self.data:
++            r = self.data[key]
++            if strip:
++                r = r.strip()
++        else:
++            r = default
++        return r
++
++    def get_json(self, key, default=None):
++        result = self.get(key, default=default)
++        if result is None:
++            return default
++        return json.loads(result)
++
++    def exists(self):
+         return True
+ 
+-    def close(self):
+-        return True
++    def open_transport(self):
++        assert(not self._is_open)
++        self._is_open = True
++
++    def close_transport(self):
++        assert(self._is_open)
++        self._is_open = False
+ 
+-    def isOpen(self):
+-        return True
+ 
+-    def write(self, line):
+-        line = line.replace('GET ', '')
+-        self.last = line.rstrip()
+-        self.new = True
+-        self.count = 0
+-        self.mocked_out = []
+-
+-    def readline(self):
+-        if self.new:
+-            self.new = False
+-            if self.last in self.mockdata:
+-                return 'SUCCESS\n'
+-            else:
+-                return 'NOTFOUND %s\n' % self.last
+-
+-        if self.last in self.mockdata:
+-            if not self.mocked_out:
+-                self.mocked_out = [x for x in self._format_out()]
+-
+-            if len(self.mocked_out) > self.count:
+-                self.count += 1
+-                return self.mocked_out[self.count - 1]
+-
+-    def _format_out(self):
+-        if self.last in self.mockdata:
+-            _mret = self.mockdata[self.last]
+-            try:
+-                for l in _mret.splitlines():
+-                    yield "%s\n" % l.rstrip()
+-            except:
+-                yield "%s\n" % _mret.rstrip()
+-
+-            yield '.'
+-            yield '\n'
+-
+-
+-class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
++class TestSmartOSDataSource(FilesystemMockingTestCase):
+     def setUp(self):
+-        helpers.FilesystemMockingTestCase.setUp(self)
++        super(TestSmartOSDataSource, self).setUp()
+ 
+-        # makeDir comes from MockerTestCase
+-        self.tmp = self.makeDir()
+-        self.legacy_user_d = self.makeDir()
++        dsmos = 'cloudinit.sources.DataSourceSmartOS'
++        patcher = mock.patch(dsmos + ".jmc_client_factory")
++        self.jmc_cfact = patcher.start()
++        self.addCleanup(patcher.stop)
++        patcher = mock.patch(dsmos + ".get_smartos_environ")
++        self.get_smartos_environ = patcher.start()
++        self.addCleanup(patcher.stop)
+ 
+-        # If you should want to watch the logs...
+-        self._log = None
+-        self._log_file = None
+-        self._log_handler = None
++        self.tmp = tempfile.mkdtemp()
++        self.addCleanup(shutil.rmtree, self.tmp)
++        self.paths = c_helpers.Paths(
++            {'cloud_dir': self.tmp, 'run_dir': self.tmp})
+ 
+-        # patch cloud_dir, so our 'seed_dir' is guaranteed empty
+-        self.paths = c_helpers.Paths({'cloud_dir': self.tmp})
++        self.legacy_user_d = os.path.join(self.tmp, 'legacy_user_tmp')
++        os.mkdir(self.legacy_user_d)
+ 
+-        self.unapply = []
+-        super(TestSmartOSDataSource, self).setUp()
++        self.orig_lud = DataSourceSmartOS.LEGACY_USER_D
++        DataSourceSmartOS.LEGACY_USER_D = self.legacy_user_d
+ 
+     def tearDown(self):
+-        helpers.FilesystemMockingTestCase.tearDown(self)
+-        if self._log_handler and self._log:
+-            self._log.removeHandler(self._log_handler)
+-        apply_patches([i for i in reversed(self.unapply)])
++        DataSourceSmartOS.LEGACY_USER_D = self.orig_lud
+         super(TestSmartOSDataSource, self).tearDown()
+ 
+-    def _patchIn(self, root):
+-        self.restore()
+-        self.patchOS(root)
+-        self.patchUtils(root)
+-
+-    def apply_patches(self, patches):
+-        ret = apply_patches(patches)
+-        self.unapply += ret
+-
+-    def _get_ds(self, sys_cfg=None, ds_cfg=None, mockdata=None, dmi_data=None,
+-                is_lxbrand=False):
+-        mod = DataSourceSmartOS
+-
+-        if mockdata is None:
+-            mockdata = MOCK_RETURNS
+-
+-        if dmi_data is None:
+-            dmi_data = DMI_DATA_RETURN
+-
+-        def _dmi_data():
+-            return dmi_data
+-
+-        def _os_uname():
+-            if not is_lxbrand:
+-                # LP: #1243287. tests assume this runs, but running test on
+-                # arm would cause them all to fail.
+-                return ('LINUX', 'NODENAME', 'RELEASE', 'VERSION', 'x86_64')
+-            else:
+-                return ('LINUX', 'NODENAME', 'RELEASE', 'BRANDZ VIRTUAL LINUX',
+-                        'X86_64')
++    def _get_ds(self, mockdata=None, mode=DataSourceSmartOS.SMARTOS_ENV_KVM,
++                sys_cfg=None, ds_cfg=None):
++        self.jmc_cfact.return_value = PsuedoJoyentClient(mockdata)
++        self.get_smartos_environ.return_value = mode
+ 
+         if sys_cfg is None:
+             sys_cfg = {}
+@@ -179,47 +406,8 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+             sys_cfg['datasource'] = sys_cfg.get('datasource', {})
+             sys_cfg['datasource']['SmartOS'] = ds_cfg
+ 
+-        self.apply_patches([(mod, 'LEGACY_USER_D', self.legacy_user_d)])
+-        self.apply_patches([(mod, 'dmi_data', _dmi_data)])
+-        self.apply_patches([(os, 'uname', _os_uname)])
+-        self.apply_patches([(mod, 'device_exists', lambda d: True)])
+-        dsrc = mod.DataSourceSmartOS(sys_cfg, distro=None,
+-                                     paths=self.paths)
+-
+-        def _get_seed_file_object():
+-            return MockMetaFile(mockdata)
+-
+-        self.apply_patches([(dsrc, '_get_seed_file_object',
+-                             _get_seed_file_object)])
+-        return dsrc
+-
+-    def test_seed(self):
+-        # default seed should be /dev/ttyS1
+-        dsrc = self._get_ds()
+-        ret = dsrc.get_data()
+-        self.assertTrue(ret)
+-        self.assertEquals('kvm', dsrc.smartos_type)
+-        self.assertEquals('/dev/ttyS1', dsrc.seed)
+-
+-    def test_seed_lxbrand(self):
+-        # default seed should be /dev/ttyS1
+-        dsrc = self._get_ds(is_lxbrand=True)
+-        ret = dsrc.get_data()
+-        self.assertTrue(ret)
+-        self.assertEquals('lx-brand', dsrc.smartos_type)
+-        self.assertEquals('/native/.zonecontrol/metadata.sock', dsrc.seed)
+-
+-    def test_issmartdc(self):
+-        dsrc = self._get_ds()
+-        ret = dsrc.get_data()
+-        self.assertTrue(ret)
+-        self.assertTrue(dsrc.is_smartdc)
+-
+-    def test_issmartdc_lxbrand(self):
+-        dsrc = self._get_ds(is_lxbrand=True)
+-        ret = dsrc.get_data()
+-        self.assertTrue(ret)
+-        self.assertTrue(dsrc.is_smartdc)
++        return DataSourceSmartOS.DataSourceSmartOS(
++            sys_cfg, distro=None, paths=self.paths)
+ 
+     def test_no_base64(self):
+         ds_cfg = {'no_base64_decode': ['test_var1'], 'all_base': True}
+@@ -231,110 +419,93 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['sdc:uuid'],
+-                          dsrc.metadata['instance-id'])
++        self.assertEqual(MOCK_RETURNS['sdc:uuid'],
++                         dsrc.metadata['instance-id'])
+ 
+     def test_root_keys(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['root_authorized_keys'],
+-                          dsrc.metadata['public-keys'])
++        self.assertEqual(MOCK_RETURNS['root_authorized_keys'],
++                         dsrc.metadata['public-keys'])
+ 
+     def test_hostname_b64(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['hostname'],
+-                          dsrc.metadata['local-hostname'])
++        self.assertEqual(MOCK_RETURNS['hostname'],
++                         dsrc.metadata['local-hostname'])
+ 
+     def test_hostname(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['hostname'],
+-                          dsrc.metadata['local-hostname'])
++        self.assertEqual(MOCK_RETURNS['hostname'],
++                         dsrc.metadata['local-hostname'])
+ 
+-    def test_base64_all(self):
+-        # metadata provided base64_all of true
++    def test_hostname_if_no_sdc_hostname(self):
+         my_returns = MOCK_RETURNS.copy()
+-        my_returns['base64_all'] = "true"
+-        for k in ('hostname', 'cloud-init:user-data'):
+-            my_returns[k] = base64.b64encode(my_returns[k])
+-
++        my_returns['sdc:hostname'] = 'sdc-' + my_returns['hostname']
+         dsrc = self._get_ds(mockdata=my_returns)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['hostname'],
+-                          dsrc.metadata['local-hostname'])
+-        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+-                          dsrc.userdata_raw)
+-        self.assertEquals(MOCK_RETURNS['root_authorized_keys'],
+-                          dsrc.metadata['public-keys'])
+-        self.assertEquals(MOCK_RETURNS['disable_iptables_flag'],
+-                          dsrc.metadata['iptables_disable'])
+-        self.assertEquals(MOCK_RETURNS['enable_motd_sys_info'],
+-                          dsrc.metadata['motd_sys_info'])
+-
+-    def test_b64_userdata(self):
+-        my_returns = MOCK_RETURNS.copy()
+-        my_returns['b64-cloud-init:user-data'] = "true"
+-        my_returns['b64-hostname'] = "true"
+-        for k in ('hostname', 'cloud-init:user-data'):
+-            my_returns[k] = base64.b64encode(my_returns[k])
++        self.assertEqual(my_returns['hostname'],
++                         dsrc.metadata['local-hostname'])
+ 
++    def test_sdc_hostname_if_no_hostname(self):
++        my_returns = MOCK_RETURNS.copy()
++        my_returns['sdc:hostname'] = 'sdc-' + my_returns['hostname']
++        del my_returns['hostname']
+         dsrc = self._get_ds(mockdata=my_returns)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['hostname'],
+-                          dsrc.metadata['local-hostname'])
+-        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+-                          dsrc.userdata_raw)
+-        self.assertEquals(MOCK_RETURNS['root_authorized_keys'],
+-                          dsrc.metadata['public-keys'])
+-
+-    def test_b64_keys(self):
+-        my_returns = MOCK_RETURNS.copy()
+-        my_returns['base64_keys'] = 'hostname,ignored'
+-        for k in ('hostname',):
+-            my_returns[k] = base64.b64encode(my_returns[k])
++        self.assertEqual(my_returns['sdc:hostname'],
++                         dsrc.metadata['local-hostname'])
+ 
++    def test_sdc_uuid_if_no_hostname_or_sdc_hostname(self):
++        my_returns = MOCK_RETURNS.copy()
++        del my_returns['hostname']
+         dsrc = self._get_ds(mockdata=my_returns)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['hostname'],
+-                          dsrc.metadata['local-hostname'])
+-        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+-                          dsrc.userdata_raw)
++        self.assertEqual(my_returns['sdc:uuid'],
++                         dsrc.metadata['local-hostname'])
+ 
+     def test_userdata(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['user-data'],
+-                          dsrc.metadata['legacy-user-data'])
+-        self.assertEquals(MOCK_RETURNS['cloud-init:user-data'],
+-                          dsrc.userdata_raw)
++        self.assertEqual(MOCK_RETURNS['user-data'],
++                         dsrc.metadata['legacy-user-data'])
++        self.assertEqual(MOCK_RETURNS['cloud-init:user-data'],
++                         dsrc.userdata_raw)
++
++    def test_sdc_nics(self):
++        dsrc = self._get_ds(mockdata=MOCK_RETURNS)
++        ret = dsrc.get_data()
++        self.assertTrue(ret)
++        self.assertEqual(json.loads(MOCK_RETURNS['sdc:nics']),
++                         dsrc.metadata['network-data'])
+ 
+     def test_sdc_scripts(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['user-script'],
+-                          dsrc.metadata['user-script'])
++        self.assertEqual(MOCK_RETURNS['user-script'],
++                         dsrc.metadata['user-script'])
+ 
+         legacy_script_f = "%s/user-script" % self.legacy_user_d
+         self.assertTrue(os.path.exists(legacy_script_f))
+         self.assertTrue(os.path.islink(legacy_script_f))
+         user_script_perm = oct(os.stat(legacy_script_f)[stat.ST_MODE])[-3:]
+-        self.assertEquals(user_script_perm, '700')
++        self.assertEqual(user_script_perm, '700')
+ 
+     def test_scripts_shebanged(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['user-script'],
+-                          dsrc.metadata['user-script'])
++        self.assertEqual(MOCK_RETURNS['user-script'],
++                         dsrc.metadata['user-script'])
+ 
+         legacy_script_f = "%s/user-script" % self.legacy_user_d
+         self.assertTrue(os.path.exists(legacy_script_f))
+@@ -342,9 +513,9 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         shebang = None
+         with open(legacy_script_f, 'r') as f:
+             shebang = f.readlines()[0].strip()
+-        self.assertEquals(shebang, "#!/bin/bash")
++        self.assertEqual(shebang, "#!/bin/bash")
+         user_script_perm = oct(os.stat(legacy_script_f)[stat.ST_MODE])[-3:]
+-        self.assertEquals(user_script_perm, '700')
++        self.assertEqual(user_script_perm, '700')
+ 
+     def test_scripts_shebang_not_added(self):
+         """
+@@ -360,8 +531,8 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         dsrc = self._get_ds(mockdata=my_returns)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(my_returns['user-script'],
+-                          dsrc.metadata['user-script'])
++        self.assertEqual(my_returns['user-script'],
++                         dsrc.metadata['user-script'])
+ 
+         legacy_script_f = "%s/user-script" % self.legacy_user_d
+         self.assertTrue(os.path.exists(legacy_script_f))
+@@ -369,14 +540,14 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         shebang = None
+         with open(legacy_script_f, 'r') as f:
+             shebang = f.readlines()[0].strip()
+-        self.assertEquals(shebang, "#!/usr/bin/perl")
++        self.assertEqual(shebang, "#!/usr/bin/perl")
+ 
+     def test_userdata_removed(self):
+         """
+             User-data in the SmartOS world is supposed to be written to a file
+             each and every boot. This tests to make sure that in the event the
+-            legacy user-data is removed, the existing user-data is backed-up and
+-            there is no /var/db/user-data left.
++            legacy user-data is removed, the existing user-data is backed-up
++            and there is no /var/db/user-data left.
+         """
+ 
+         user_data_f = "%s/mdata-user-data" % self.legacy_user_d
+@@ -398,8 +569,8 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+                 permissions = oct(os.stat(name_f)[stat.ST_MODE])[-3:]
+                 if re.match(r'.*\/mdata-user-data$', name_f):
+                     found_new = True
+-                    print name_f
+-                    self.assertEquals(permissions, '400')
++                    print(name_f)
++                    self.assertEqual(permissions, '400')
+ 
+         self.assertFalse(found_new)
+ 
+@@ -407,8 +578,8 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['sdc:vendor-data'],
+-                          dsrc.metadata['vendor-data'])
++        self.assertEqual(MOCK_RETURNS['sdc:vendor-data'],
++                         dsrc.metadata['vendor-data'])
+ 
+     def test_default_vendor_data(self):
+         my_returns = MOCK_RETURNS.copy()
+@@ -417,7 +588,7 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         dsrc = self._get_ds(mockdata=my_returns)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertNotEquals(def_op_script, dsrc.metadata['vendor-data'])
++        self.assertNotEqual(def_op_script, dsrc.metadata['vendor-data'])
+ 
+         # we expect default vendor-data is a boothook
+         self.assertTrue(dsrc.vendordata_raw.startswith("#cloud-boothook"))
+@@ -426,15 +597,15 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['disable_iptables_flag'],
+-                          dsrc.metadata['iptables_disable'])
++        self.assertEqual(MOCK_RETURNS['disable_iptables_flag'],
++                         dsrc.metadata['iptables_disable'])
+ 
+     def test_motd_sys_info(self):
+         dsrc = self._get_ds(mockdata=MOCK_RETURNS)
+         ret = dsrc.get_data()
+         self.assertTrue(ret)
+-        self.assertEquals(MOCK_RETURNS['enable_motd_sys_info'],
+-                          dsrc.metadata['motd_sys_info'])
++        self.assertEqual(MOCK_RETURNS['enable_motd_sys_info'],
++                         dsrc.metadata['motd_sys_info'])
+ 
+     def test_default_ephemeral(self):
+         # Test to make sure that the builtin config has the ephemeral
+@@ -471,12 +642,421 @@ class TestSmartOSDataSource(helpers.FilesystemMockingTestCase):
+                          mydscfg['disk_aliases']['FOO'])
+ 
+ 
+-def apply_patches(patches):
+-    ret = []
+-    for (ref, name, replace) in patches:
+-        if replace is None:
+-            continue
+-        orig = getattr(ref, name)
+-        setattr(ref, name, replace)
+-        ret.append((ref, name, orig))
+-    return ret
++class ShortReader(object):
++    """Implements a 'read' interface for bytes provided.
++    much like io.BytesIO but the 'endbyte' acts as if EOF.
++    When it is reached a short will be returned."""
++    def __init__(self, initial_bytes, endbyte=b'\0'):
++        self.data = initial_bytes
++        self.index = 0
++        self.len = len(self.data)
++        self.endbyte = endbyte
++
++    @property
++    def emptied(self):
++        return self.index >= self.len
++
++    def read(self, size=-1):
++        """Read size bytes but not past a null."""
++        if size == 0 or self.index >= self.len:
++            return b''
++
++        rsize = size
++        if size < 0 or size + self.index > self.len:
++            rsize = self.len - self.index
++
++        next_null = self.data.find(self.endbyte, self.index, rsize)
++        if next_null >= 0:
++            rsize = next_null - self.index + 1
++        i = self.index
++        self.index += rsize
++        ret = self.data[i:i + rsize]
++        if len(ret) and ret[-1:] == self.endbyte:
++            ret = ret[:-1]
++        return ret
++
++
++class TestJoyentMetadataClient(FilesystemMockingTestCase):
++
++    invalid = b'invalid command\n'
++    failure = b'FAILURE\n'
++    v2_ok = b'V2_OK\n'
++
++    def setUp(self):
++        super(TestJoyentMetadataClient, self).setUp()
++
++        self.serial = mock.MagicMock(spec=serial.Serial)
++        self.request_id = 0xabcdef12
++        self.metadata_value = 'value'
++        self.response_parts = {
++            'command': 'SUCCESS',
++            'crc': 'b5a9ff00',
++            'length': SUCCESS_LEN + len(b64e(self.metadata_value)),
++            'payload': b64e(self.metadata_value),
++            'request_id': '{0:08x}'.format(self.request_id),
++        }
++
++        def make_response():
++            payloadstr = ''
++            if 'payload' in self.response_parts:
++                payloadstr = ' {0}'.format(self.response_parts['payload'])
++            return ('V2 {length} {crc} {request_id} '
++                    '{command}{payloadstr}\n'.format(
++                        payloadstr=payloadstr,
++                        **self.response_parts).encode('ascii'))
++
++        self.metasource_data = None
++
++        def read_response(length):
++            if not self.metasource_data:
++                self.metasource_data = make_response()
++                self.metasource_data_len = len(self.metasource_data)
++            resp = self.metasource_data[:length]
++            self.metasource_data = self.metasource_data[length:]
++            return resp
++
++        def randint_is_request_id(v1, v2):
++            return self.request_id
++
++        self.serial.read.side_effect = read_response
++        mod = DataSourceSmartOS.random
++        func = getattr(mod, 'randint')
++        setattr(mod, 'randint', randint_is_request_id)
++        self.patched_funcs.append((mod, 'randint', func))
++        mock.patch('cloudinit.sources.DataSourceSmartOS.random.randint',
++                   mock.Mock(return_value=self.request_id))
++
++    def _get_client(self):
++        return DataSourceSmartOS.JoyentMetadataClient(
++            fp=self.serial, smartos_type=DataSourceSmartOS.SMARTOS_ENV_KVM)
++
++    def _get_serial_client(self):
++        self.serial.timeout = 1
++        return DataSourceSmartOS.JoyentMetadataSerialClient(None,
++                                                            fp=self.serial)
++
++    def assertEndsWith(self, haystack, prefix):
++        self.assertTrue(haystack.endswith(prefix),
++                        "{0} does not end with '{1}'".format(
++                            repr(haystack), prefix))
++
++    def assertStartsWith(self, haystack, prefix):
++        self.assertTrue(haystack.startswith(prefix),
++                        "{0} does not start with '{1}'".format(
++                            repr(haystack), prefix))
++
++    def assertNoMoreSideEffects(self, obj):
++        self.assertRaises(StopIteration, obj)
++
++    def test_get_metadata_writes_a_single_line(self):
++        client = self._get_client()
++        client.get('some_key')
++        self.assertEqual(1, self.serial.write.call_count)
++        written_line = self.serial.write.call_args[0][0]
++        self.assertEndsWith(written_line.decode('ascii'),
++                            b'\n'.decode('ascii'))
++        self.assertEqual(1, written_line.count(b'\n'))
++
++    def _get_written_line(self, key='some_key'):
++        client = self._get_client()
++        client.get(key)
++        return self.serial.write.call_args[0][0]
++
++    def test_get_metadata_writes_bytes(self):
++        self.assertIsInstance(self._get_written_line(), six.binary_type)
++
++    def test_get_metadata_line_starts_with_v2(self):
++        foo = self._get_written_line()
++        self.assertStartsWith(foo.decode('ascii'), b'V2'.decode('ascii'))
++
++    def test_get_metadata_uses_get_command(self):
++        parts = self._get_written_line().decode('ascii').strip().split(' ')
++        self.assertEqual('GET', parts[4])
++
++    def test_get_metadata_base64_encodes_argument(self):
++        key = 'my_key'
++        parts = self._get_written_line(key).decode('ascii').strip().split(' ')
++        self.assertEqual(b64e(key), parts[5])
++
++    def test_get_metadata_calculates_length_correctly(self):
++        parts = self._get_written_line().decode('ascii').strip().split(' ')
++        expected_length = len(' '.join(parts[3:]))
++        self.assertEqual(expected_length, int(parts[1]))
++
++    def test_get_metadata_uses_appropriate_request_id(self):
++        parts = self._get_written_line().decode('ascii').strip().split(' ')
++        request_id = parts[3]
++        self.assertEqual(8, len(request_id))
++        self.assertEqual(request_id, request_id.lower())
++
++    def test_get_metadata_uses_random_number_for_request_id(self):
++        line = self._get_written_line()
++        request_id = line.decode('ascii').strip().split(' ')[3]
++        self.assertEqual('{0:08x}'.format(self.request_id), request_id)
++
++    def test_get_metadata_checksums_correctly(self):
++        parts = self._get_written_line().decode('ascii').strip().split(' ')
++        expected_checksum = '{0:08x}'.format(
++            crc32(' '.join(parts[3:]).encode('utf-8')) & 0xffffffff)
++        checksum = parts[2]
++        self.assertEqual(expected_checksum, checksum)
++
++    def test_get_metadata_reads_a_line(self):
++        client = self._get_client()
++        client.get('some_key')
++        self.assertEqual(self.metasource_data_len, self.serial.read.call_count)
++
++    def test_get_metadata_returns_valid_value(self):
++        client = self._get_client()
++        value = client.get('some_key')
++        self.assertEqual(self.metadata_value, value)
++
++    def test_get_metadata_throws_exception_for_incorrect_length(self):
++        self.response_parts['length'] = 0
++        client = self._get_client()
++        self.assertRaises(DataSourceSmartOS.JoyentMetadataFetchException,
++                          client.get, 'some_key')
++
++    def test_get_metadata_throws_exception_for_incorrect_crc(self):
++        self.response_parts['crc'] = 'deadbeef'
++        client = self._get_client()
++        self.assertRaises(DataSourceSmartOS.JoyentMetadataFetchException,
++                          client.get, 'some_key')
++
++    def test_get_metadata_throws_exception_for_request_id_mismatch(self):
++        self.response_parts['request_id'] = 'deadbeef'
++        client = self._get_client()
++        client._checksum = lambda _: self.response_parts['crc']
++        self.assertRaises(DataSourceSmartOS.JoyentMetadataFetchException,
++                          client.get, 'some_key')
++
++    def test_get_metadata_returns_None_if_value_not_found(self):
++        self.response_parts['payload'] = ''
++        self.response_parts['command'] = 'NOTFOUND'
++        self.response_parts['length'] = NOTFOUND_LEN
++        client = self._get_client()
++        client._checksum = lambda _: self.response_parts['crc']
++        self.assertIsNone(client.get('some_key'))
++
++    def test_negotiate(self):
++        client = self._get_client()
++        reader = ShortReader(self.v2_ok)
++        client.fp.read.side_effect = reader.read
++        client._negotiate()
++        self.assertTrue(reader.emptied)
++
++    def test_negotiate_short_response(self):
++        client = self._get_client()
++        # chopped '\n' from v2_ok.
++        reader = ShortReader(self.v2_ok[:-1] + b'\0')
++        client.fp.read.side_effect = reader.read
++        self.assertRaises(DataSourceSmartOS.JoyentMetadataTimeoutException,
++                          client._negotiate)
++        self.assertTrue(reader.emptied)
++
++    def test_negotiate_bad_response(self):
++        client = self._get_client()
++        reader = ShortReader(b'garbage\n' + self.v2_ok)
++        client.fp.read.side_effect = reader.read
++        self.assertRaises(DataSourceSmartOS.JoyentMetadataFetchException,
++                          client._negotiate)
++        self.assertEqual(self.v2_ok, client.fp.read())
++
++    def test_serial_open_transport(self):
++        client = self._get_serial_client()
++        reader = ShortReader(b'garbage\0' + self.invalid + self.v2_ok)
++        client.fp.read.side_effect = reader.read
++        client.open_transport()
++        self.assertTrue(reader.emptied)
++
++    def test_flush_failure(self):
++        client = self._get_serial_client()
++        reader = ShortReader(b'garbage' + b'\0' + self.failure +
++                             self.invalid + self.v2_ok)
++        client.fp.read.side_effect = reader.read
++        client.open_transport()
++        self.assertTrue(reader.emptied)
++
++    def test_flush_many_timeouts(self):
++        client = self._get_serial_client()
++        reader = ShortReader(b'\0' * 100 + self.invalid + self.v2_ok)
++        client.fp.read.side_effect = reader.read
++        client.open_transport()
++        self.assertTrue(reader.emptied)
++
++    def test_list_metadata_returns_list(self):
++        parts = ['foo', 'bar']
++        value = b64e('\n'.join(parts))
++        self.response_parts['payload'] = value
++        self.response_parts['crc'] = '40873553'
++        self.response_parts['length'] = SUCCESS_LEN + len(value)
++        client = self._get_client()
++        self.assertEqual(client.list(), parts)
++
++    def test_list_metadata_returns_empty_list_if_no_customer_metadata(self):
++        del self.response_parts['payload']
++        self.response_parts['length'] = SUCCESS_LEN - 1
++        self.response_parts['crc'] = '14e563ba'
++        client = self._get_client()
++        self.assertEqual(client.list(), [])
++
++
++class TestNetworkConversion(TestCase):
++    def test_convert_simple(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.102/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:f5:e4:f5'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'static',
++                              'address': '192.168.128.93/22'}],
++                 'mtu': 8500, 'mac_address': '90:b8:d0:a5:ff:cd'}]}
++        found = convert_net(SDC_NICS)
++        self.assertEqual(expected, found)
++
++    def test_convert_simple_alt(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.51/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:ae:64:51'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'static',
++                              'address': '10.210.1.217/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:bd:4f:9c'}]}
++        found = convert_net(SDC_NICS_ALT)
++        self.assertEqual(expected, found)
++
++    def test_convert_simple_dhcp(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.51/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:ae:64:51'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'dhcp4'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:bd:4f:9c'}]}
++        found = convert_net(SDC_NICS_DHCP)
++        self.assertEqual(expected, found)
++
++    def test_convert_simple_multi_ip(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.51/24'},
++                             {'type': 'static',
++                              'address': '8.12.42.52/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:ae:64:51'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'static',
++                              'address': '10.210.1.217/24'},
++                             {'type': 'static',
++                              'address': '10.210.1.151/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:bd:4f:9c'}]}
++        found = convert_net(SDC_NICS_MIP)
++        self.assertEqual(expected, found)
++
++    def test_convert_with_dns(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.51/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:ae:64:51'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'dhcp4'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:bd:4f:9c'},
++                {'type': 'nameserver',
++                 'address': ['8.8.8.8', '8.8.8.1'], 'search': ["local"]}]}
++        found = convert_net(
++            network_data=SDC_NICS_DHCP, dns_servers=['8.8.8.8', '8.8.8.1'],
++            dns_domain="local")
++        self.assertEqual(expected, found)
++
++    def test_convert_simple_multi_ipv6(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'name': 'net0', 'type': 'physical',
++                 'subnets': [{'type': 'static', 'address':
++                              '2001:4800:78ff:1b:be76:4eff:fe06:96b3/64'},
++                             {'type': 'static', 'gateway': '8.12.42.1',
++                              'address': '8.12.42.51/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:ae:64:51'},
++                {'name': 'net1', 'type': 'physical',
++                 'subnets': [{'type': 'static',
++                              'address': '10.210.1.217/24'}],
++                 'mtu': 1500, 'mac_address': '90:b8:d0:bd:4f:9c'}]}
++        found = convert_net(SDC_NICS_MIP_IPV6)
++        self.assertEqual(expected, found)
++
++    def test_convert_simple_both_ipv4_ipv6(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'mac_address': '90:b8:d0:ae:64:51', 'mtu': 1500,
++                 'name': 'net0', 'type': 'physical',
++                 'subnets': [{'address': '2001::10/64', 'gateway': '2001::1',
++                              'type': 'static'},
++                             {'address': '8.12.42.51/24',
++                              'gateway': '8.12.42.1',
++                              'type': 'static'},
++                             {'address': '2001::11/64', 'type': 'static'},
++                             {'address': '8.12.42.52/32', 'type': 'static'}]},
++                {'mac_address': '90:b8:d0:bd:4f:9c', 'mtu': 1500,
++                 'name': 'net1', 'type': 'physical',
++                 'subnets': [{'address': '10.210.1.217/24',
++                              'type': 'static'}]}]}
++        found = convert_net(SDC_NICS_IPV4_IPV6)
++        self.assertEqual(expected, found)
++
++    def test_gateways_not_on_all_nics(self):
++        expected = {
++            'version': 1,
++            'config': [
++                {'mac_address': '90:b8:d0:d8:82:b4', 'mtu': 1500,
++                 'name': 'net0', 'type': 'physical',
++                 'subnets': [{'address': '8.12.42.26/24',
++                              'gateway': '8.12.42.1', 'type': 'static'}]},
++                {'mac_address': '90:b8:d0:0a:51:31', 'mtu': 1500,
++                 'name': 'net1', 'type': 'physical',
++                 'subnets': [{'address': '10.210.1.27/24',
++                              'type': 'static'}]}]}
++        found = convert_net(SDC_NICS_SINGLE_GATEWAY)
++        self.assertEqual(expected, found)
++
++    def test_routes_on_all_nics(self):
++        routes = [
++            {'linklocal': False, 'dst': '3.0.0.0/8', 'gateway': '8.12.42.3'},
++            {'linklocal': False, 'dst': '4.0.0.0/8', 'gateway': '10.210.1.4'}]
++        expected = {
++            'version': 1,
++            'config': [
++                {'mac_address': '90:b8:d0:d8:82:b4', 'mtu': 1500,
++                 'name': 'net0', 'type': 'physical',
++                 'subnets': [{'address': '8.12.42.26/24',
++                              'gateway': '8.12.42.1', 'type': 'static',
++                              'routes': [{'network': '3.0.0.0/8',
++                                          'gateway': '8.12.42.3'},
++                                         {'network': '4.0.0.0/8',
++                                         'gateway': '10.210.1.4'}]}]},
++                {'mac_address': '90:b8:d0:0a:51:31', 'mtu': 1500,
++                 'name': 'net1', 'type': 'physical',
++                 'subnets': [{'address': '10.210.1.27/24', 'type': 'static',
++                              'routes': [{'network': '3.0.0.0/8',
++                                          'gateway': '8.12.42.3'},
++                                         {'network': '4.0.0.0/8',
++                                         'gateway': '10.210.1.4'}]}]}]}
++        found = convert_net(SDC_NICS_SINGLE_GATEWAY, routes=routes)
++        self.maxDiff = None
++        self.assertEqual(expected, found)
