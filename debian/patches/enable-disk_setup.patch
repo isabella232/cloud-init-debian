@@ -1,0 +1,31 @@
+commit 0b1ed526d82351c30d0ea273f8d2589fac559a86
+Author: Mike Gerdts <mike.gerdts@joyent.com>
+Date:   Tue Jun 19 15:48:32 2018 +0000
+
+    enable disk_setup
+    
+    Modify /etc/cloud/cloud.cfg.d so that disk_setup is run by default.
+
+diff --git a/debian/changelog b/debian/changelog
+index c39a49e..eec4c9f 100644
+--- a/debian/changelog
++++ b/debian/changelog
+@@ -1,5 +1,6 @@
+ cloud-init (0.7.6~bzr976-2-joyent.2) unstable; urgency=medium
+ 
++  * Enable disk_setup so that ephemeral drive is formatted and mounted.
+   * Change default boot options to use nofail instead of nobootwait.
+     - nobootwait is not supported on debian 8
+     - nofail will allow the system to come up into multi-user mode should things
+diff --git a/debian/cloud.cfg b/debian/cloud.cfg
+index ef0453d..cbb643e 100644
+--- a/debian/cloud.cfg
++++ b/debian/cloud.cfg
+@@ -27,6 +27,7 @@ cloud_init_modules:
+  - bootcmd
+  - write-files
+  - resizefs
++ - disk_setup
+  - set_hostname
+  - update_hostname
+  - update_etc_hosts

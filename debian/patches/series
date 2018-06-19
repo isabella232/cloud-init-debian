@@ -4,3 +4,5 @@ util-dmidecode.patch
 smartos-lx.patch
 smartos-resync-bbcc5e8.patch
 smartos-apply_network.patch
+nobootwait-nofail.patch
+enable-disk_setup.patch
