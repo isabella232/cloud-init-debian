@@ -6,3 +6,4 @@ smartos-resync-bbcc5e8.patch
 smartos-apply_network.patch
 nobootwait-nofail.patch
 enable-disk_setup.patch
+smartos-network-every-boot.patch
